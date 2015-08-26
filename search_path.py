@@ -133,7 +133,7 @@ def a_star_search(map_grid, start, goal, **kwargs):
 
     # when open set is not empty
     while len(open_heap) > 0:
-        # get open point with smallest f_score
+        # pop the point with the smallest f_score from the open set
         current_f_score, current_point = heapq.heappop(open_heap)
         open_set.remove(current_point)
         # if already reach the goal
@@ -156,6 +156,7 @@ def a_star_search(map_grid, start, goal, **kwargs):
                 g_score[neighbour_point] = tentative_g_score
                 f_score[neighbour_point] = tentative_g_score + cost_estimate(neighbour_point, goal_seq)
                 if not in_open_set:
+                    # push it into open set
                     heapq.heappush(open_heap, (f_score[neighbour_point], neighbour_point))
                     open_set.add(neighbour_point)
     return []

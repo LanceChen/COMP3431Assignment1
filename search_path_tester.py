@@ -119,7 +119,7 @@ def read_map(map_file):
                 grid.info.height = int(param[1])
                 first_line = False
             else:
-                for num in line.split(' '):
+                for num in line.strip('\n').split(' '):
                     if num:
                         grid.data.append(int(num))
     assert len(grid.data) == grid.info.width * grid.info.height
@@ -130,8 +130,8 @@ def draw_map():
     canvas.delete('all')
     width = grid.info.width
     height = grid.info.height
-    for row in range(width):
-        for col in range(height):
+    for row in range(height):
+        for col in range(width):
             val = grid.data[row * width + col]
             color = 'green'
             if val != -1:
