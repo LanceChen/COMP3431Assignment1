@@ -1,0 +1,5 @@
+nav_msgs/OccupancyGrid map
+WayPoint start
+WayPoint goal
+---
+WayPoint[] path
