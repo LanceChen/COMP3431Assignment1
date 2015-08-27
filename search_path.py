@@ -65,49 +65,32 @@ def reconstruct_path(came_from, current):
     return total_path
 
 
-def neighbour_points(map_grid, point):
-    """Get the neighbouring points of a given point based on the map info.
+def is_valid_point(map_grid, point):
+    """Check if a point in the map is valid.
+    A point is invalid if and only if the point is out of the range of the map or it's occ value is -1.
+    @type map_grid: OccupancyGrid
+    @type point: (int, int)
+    """
+    x = point[0]
+    y = point[1]
+    width = map_grid.info.width
+    height = map_grid.info.height
+    return 0 <= x < width and 0 <= y < height and map_grid.data[y * width + x] != -1
 
-    If a candidate point's occ is -1, it will be discarded.
+
+def neighbour_points(map_grid, point):
+    """Get the valid neighbouring points of a given point based on the map info.
     @type map_grid: OccupancyGrid
     @type point: (int, int)
     """
     point_x = point[0]
     point_y = point[1]
-    w = map_grid.info.width
-    h = map_grid.info.height
-    neighbours = []
-    if point_x > 0:
-        # left
-        if map_grid.data[point_y * w + (point_x - 1)] != -1:
-            neighbours.append((point_x - 1, point_y))
-        if point_y > 0:
-            # left top
-            if map_grid.data[(point_y - 1) * w + (point_x - 1)] != -1:
-                neighbours.append((point_x - 1, point_y - 1))
-        if point_y < w - 1:
-            # left bottom
-            if map_grid.data[(point_y + 1) * w + (point_x - 1)] != -1:
-                neighbours.append((point_x - 1, point_y + 1))
-    if point_x < w - 1:
-        # right
-        if map_grid.data[point_y * w + (point_x + 1)] != -1:
-            neighbours.append((point_x + 1, point_y))
-        if point_y > 0:
-            # right top
-            if map_grid.data[(point_y - 1) * w + (point_x + 1)] != -1:
-                neighbours.append((point_x + 1, point_y - 1))
-        if point_y < w - 1:
-            # right bottom
-            if map_grid.data[(point_y + 1) * w + (point_x + 1)] != -1:
-                neighbours.append((point_x + 1, point_y + 1))
-    # top
-    if point_y > 0 and map_grid.data[(point_y - 1) * w + point_x] != -1:
-        neighbours.append((point_x, point_y - 1))
-    # bottom
-    if point_y < h - 1 and map_grid.data[(point_y + 1) * w + point_x] != -1:
-        neighbours.append((point_x, point_y + 1))
-    return neighbours
+    neighbours = [
+        (point_x - 1, point_y - 1), (point_x, point_y - 1), (point_x + 1, point_y - 1),
+        (point_x - 1, point_y), (point_x, point_y), (point_x + 1, point_y),
+        (point_x - 1, point_y + 1), (point_x, point_y + 1), (point_x + 1, point_y + 1)
+    ]
+    return [p for p in neighbours if is_valid_point(map_grid, p)]
 
 
 def a_star_search(map_grid, start, goal, **kwargs):

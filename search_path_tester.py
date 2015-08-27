@@ -3,9 +3,9 @@
 
 """An interactive testing tool for validating A* algorithm in Search Path Service.
 
-This script read in given map file, and show the map in GUI. The user can 'right-click' any reasonable point to specify
-it as the starting point or the goal point (in this order), and then it will call A* algorithm to compute the shortest
-path, which will be rendered using blue arrows in the map. The start/end point will be filled with purple.
+This script reads in given map file, and shows the map in GUI. The user can 'right-click' any reasonable point to
+specify it as the starting point or the goal point (in this order), and then it will call A* algorithm to compute the
+shortest path, which will be rendered using blue arrows in the map. The start/end point will be filled with purple.
 
 The user can also 'left-click' to switch to different map modes:
     1. Original map: show the occupancy grid using red-based colors. At each block, the bigger its occ value is, the
@@ -38,7 +38,7 @@ grid = None  # the occupancy grid (original map data)
 closed_set = set()  # closed set of A* algorithm
 open_set = set()  # open set of A* algorithm
 came_from = {}  # "came from" dict of A* algorithm
-path = []  # shorted path computed by A* algorithm
+path = []  # shortest path computed by A* algorithm
 
 
 def start():
