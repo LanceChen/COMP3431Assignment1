@@ -15,6 +15,7 @@ import rospy
 from nav_msgs.msg import OccupancyGrid
 from assignment1.msg import *
 from assignment1.srv import *
+from constants import robot_radius
 
 occ_threshold = 60
 inf = float('inf')
@@ -27,7 +28,7 @@ def euclidean_distance(x1, y1, x2, y2):
     return math.sqrt(dx * dx + dy * dy)
 
 
-def map_distance(map_grid, start, end):
+def map_distance(map_grid, augmented_occ, start, end):
     """Get the map distance between start point and end point.
 
     If occupancy >= occ_threshold, it will return Infinity, otherwise return the euclidean distance.
@@ -38,6 +39,8 @@ def map_distance(map_grid, start, end):
     w = map_grid.info.width
     goal_occ = map_grid.data[end[1] * w + end[0]]
     if goal_occ >= occ_threshold:
+        return inf
+    if end in augmented_occ and augmented_occ[end] >= occ_threshold:
         return inf
     return euclidean_distance(start[0], start[1], end[0], end[1])
 
@@ -67,7 +70,7 @@ def reconstruct_path(came_from, current):
 
 def is_valid_point(map_grid, point):
     """Check if a point in the map is valid.
-    A point is invalid if and only if the point is out of the range of the map or it's occ value is -1.
+    A point is invalid if and only if the point is out of the range of the map.
     @type map_grid: OccupancyGrid
     @type point: (int, int)
     """
@@ -75,7 +78,7 @@ def is_valid_point(map_grid, point):
     y = point[1]
     width = map_grid.info.width
     height = map_grid.info.height
-    return 0 <= x < width and 0 <= y < height and map_grid.data[y * width + x] != -1
+    return 0 <= x < width and 0 <= y < height
 
 
 def neighbour_points(map_grid, point):
@@ -93,6 +96,33 @@ def neighbour_points(map_grid, point):
     return [p for p in neighbours if is_valid_point(map_grid, p)]
 
 
+def preprocess_map(map_grid):
+    """Preprocess the map and generate the augmented occ values for some of the points
+    @type map_grid: OccupancyGrid
+    """
+    h = map_grid.info.height
+    w = map_grid.info.width
+    robot_map_radius = robot_radius / map_grid.info.resolution
+    robot_map_radius_int = int(math.ceil(robot_map_radius))
+    print 'Robot map radius: %d' % robot_map_radius_int
+    augmented_occ = {}
+    for i in range(h):
+        for j in range(w):
+            occ = map_grid.data[i * w + j]
+            # for each unsafe point, spread the circular influence area by robot radius
+            if occ >= occ_threshold:
+                min_i = max(i - robot_map_radius_int, 0)
+                max_i = min(i + robot_map_radius_int, h - 1)
+                min_j = max(j - robot_map_radius_int, 0)
+                max_j = min(j + robot_map_radius_int, w - 1)
+                points = [(x, y) for x in range(min_j, max_j + 1) for y in range(min_i, max_i + 1)
+                          if euclidean_distance(x, y, j, i) <= robot_map_radius]
+                for p in points:
+                    if p not in augmented_occ or augmented_occ[p] < occ:
+                        augmented_occ[p] = occ
+    return augmented_occ
+
+
 def a_star_search(map_grid, start, goal, **kwargs):
     """Use A* algorithm to compute the shortest path from the start point to the goal point in the given map.
     @type map_grid: OccupancyGrid
@@ -105,6 +135,7 @@ def a_star_search(map_grid, start, goal, **kwargs):
     g_score = kwargs['g_score'] if 'g_score' in kwargs else dict()
     f_score = kwargs['f_score'] if 'f_score' in kwargs else dict()
     open_heap = []  # priority queue for fast retrieval of the open point with the smallest f_score
+    augmented_occ = preprocess_map(map_grid)  # augmented occ values
 
     # convert back to simple sequence
     start_seq = (start.x, start.y)
@@ -119,6 +150,9 @@ def a_star_search(map_grid, start, goal, **kwargs):
         # pop the point with the smallest f_score from the open set
         current_f_score, current_point = heapq.heappop(open_heap)
         open_set.remove(current_point)
+        # if smallest f_score has been INF, it means no path exists
+        if current_f_score >= inf:
+            break
         # if already reach the goal
         if current_point == goal_seq:
             return reconstruct_path(came_from, goal_seq)
@@ -129,8 +163,10 @@ def a_star_search(map_grid, start, goal, **kwargs):
             # if already closed
             if neighbour_point in closed_set:
                 continue
+            # compute map distance from this point to the current central point
+            distance = map_distance(map_grid, augmented_occ, current_point, neighbour_point)
             # compute tentative g_score
-            tentative_g_score = g_score.get(current_point, inf) + map_distance(map_grid, current_point, neighbour_point)
+            tentative_g_score = g_score.get(current_point, inf) + distance
             # if already open
             in_open_set = neighbour_point in open_set
             if not in_open_set or tentative_g_score < g_score.get(neighbour_point, inf):

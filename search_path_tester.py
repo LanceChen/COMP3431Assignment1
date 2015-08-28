@@ -15,6 +15,7 @@ The user can also 'left-click' to switch to different map modes:
         block within the closed set will be filled with light blue.
     3. Open-set map: show the final state of the open set from the A* algorithm on top of the original map. Each block
         within the open set will be filled with orange.
+    4. Robot movement map: show the track of the movement of the robot along the computed path
 """
 
 __author__ = 'kelvin'
@@ -28,6 +29,7 @@ from assignment1.msg import WayPoint
 from nav_msgs.msg import OccupancyGrid
 
 from search_path import a_star_search
+from constants import robot_radius
 
 unit = 20  # pixel per block in the map
 map_mode = 0  # map mode: [0]normal [1]closed set [2]open set
@@ -67,7 +69,7 @@ def start():
 def change_mode(event):
     """change map mode"""
     global map_mode
-    map_mode = (map_mode + 1) % 3
+    map_mode = (map_mode + 1) % 4
     draw_map()
 
 
@@ -108,7 +110,6 @@ def read_map(map_file):
     """Read map from given text file"""
     global grid
     grid = OccupancyGrid()
-    grid.info.resolution = 1
     grid.data = list()
     first_line = True
     with open(map_file, 'r') as f:
@@ -117,6 +118,7 @@ def read_map(map_file):
                 param = [s for s in line.split(' ') if s]
                 grid.info.width = int(param[0])
                 grid.info.height = int(param[1])
+                grid.info.resolution = float(param[2])
                 first_line = False
             else:
                 for num in line.strip('\n').split(' '):
@@ -157,15 +159,24 @@ def draw_map():
         ['←', 'x', '→'],
         ['↙', '↓', '↘']
     ]
+    if goal_point is not None and start_point is not None and len(path) <= 0:
+        canvas.create_text(width * unit / 2, height * unit / 2, text='No Path Found!', font=("Ubuntu", 36), fill='red')
+    robot_map_radius = robot_radius / grid.info.resolution
     for point in [(p.x, p.y) for p in path]:
         if point not in came_from:
             continue
         source_point = came_from[point]
         x = point[0] - source_point[0] + 1
         y = point[1] - source_point[1] + 1
-        canvas.create_text((source_point[0] + 0.5) * unit, (source_point[1] + 0.5) * unit, text=directions[y][x],
-                           font=("Ubuntu", unit),
-                           fill='blue')
+
+        center_x = source_point[0] + 0.5
+        center_y = source_point[1] + 0.5
+        canvas.create_text(center_x * unit, center_y * unit, text=directions[y][x],
+                           font=("Ubuntu", unit), fill='blue')
+        if map_mode == 3:
+            canvas.create_oval((center_x - robot_map_radius) * unit, (center_y - robot_map_radius) * unit,
+                               (center_x + robot_map_radius) * unit, (center_y + robot_map_radius) * unit,
+                               fill='', outline='purple', width=2)
 
 
 if __name__ == '__main__':
