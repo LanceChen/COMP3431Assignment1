@@ -15,7 +15,8 @@ The user can also 'left-click' to switch to different map modes:
         block within the closed set will be filled with light blue.
     3. Open-set map: show the final state of the open set from the A* algorithm on top of the original map. Each block
         within the open set will be filled with orange.
-    4. Robot movement map: show the track of the movement of the robot along the computed path
+    4. Robot movement planning map: show the track of the movement of the robot along the computed path, and all the
+        blocks with augmented occ values will be rendered based on augmented values rather than the original one.
 """
 
 __author__ = 'kelvin'
@@ -29,6 +30,7 @@ from assignment1.msg import WayPoint
 from nav_msgs.msg import OccupancyGrid
 
 from search_path import a_star_search
+from search_path import preprocess_map
 from constants import robot_radius
 
 unit = 20  # pixel per block in the map
@@ -41,6 +43,7 @@ closed_set = set()  # closed set of A* algorithm
 open_set = set()  # open set of A* algorithm
 came_from = {}  # "came from" dict of A* algorithm
 path = []  # shortest path computed by A* algorithm
+augmented_occ = None  # augmented occ value matrix, only compute for the first time
 
 
 def start():
@@ -95,10 +98,15 @@ def change_points(event):
 
 def call_a_star():
     """call A* algorithm"""
-    global path, closed_set, open_set, came_from
+    global path, closed_set, open_set, came_from, augmented_occ
+    if augmented_occ is None:
+        print 'First run, preprocessing map...'
+        time_start = time.clock()
+        augmented_occ = preprocess_map(grid)
+        print 'Preprocessing finished in ', time.clock() - time_start
     time_start = time.clock()
     path = a_star_search(grid, start_point, goal_point, closed_set=closed_set, open_set=open_set,
-                         came_from=came_from)
+                         came_from=came_from, augmented_occ=augmented_occ)
     time_elapsed = time.clock() - time_start
     if len(path) <= 0:
         sys.stderr.write("Warning: A* returns no result!\n")
@@ -127,6 +135,15 @@ def read_map(map_file):
     assert len(grid.data) == grid.info.width * grid.info.height
 
 
+def get_color_for(val):
+    """Get proper color to render the occ values"""
+    color = 'green'
+    if val != -1:
+        rgb = hls_to_rgb(0, (100 - val) / 100.0, 1)
+        color = '#%0.2X%0.2X%0.2X' % (int(255 * rgb[0]), int(255 * rgb[1]), int(255 * rgb[2]))
+    return color
+
+
 def draw_map():
     """Render the map using canvas"""
     canvas.delete('all')
@@ -135,10 +152,9 @@ def draw_map():
     for row in range(height):
         for col in range(width):
             val = grid.data[row * width + col]
-            color = 'green'
-            if val != -1:
-                rgb = hls_to_rgb(0, (100 - val) / 100.0, 1)
-                color = '#%0.2X%0.2X%0.2X' % (int(255 * rgb[0]), int(255 * rgb[1]), int(255 * rgb[2]))
+            if map_mode == 3 and (col, row) in augmented_occ:
+                val = augmented_occ[(col, row)]
+            color = get_color_for(val)
             canvas.create_rectangle(col * unit, row * unit, (col + 1) * unit, (row + 1) * unit, fill=color)
     if map_mode == 1:
         for point in closed_set:

@@ -18,6 +18,7 @@ from assignment1.srv import *
 from constants import robot_radius
 
 occ_threshold = 60
+safety_margin = 0.5
 inf = float('inf')
 
 
@@ -102,9 +103,8 @@ def preprocess_map(map_grid):
     """
     h = map_grid.info.height
     w = map_grid.info.width
-    robot_map_radius = robot_radius / map_grid.info.resolution
+    robot_map_radius = robot_radius / map_grid.info.resolution * (1 + safety_margin)
     robot_map_radius_int = int(math.ceil(robot_map_radius))
-    print 'Robot map radius: %d' % robot_map_radius_int
     augmented_occ = {}
     for i in range(h):
         for j in range(w):
@@ -134,8 +134,9 @@ def a_star_search(map_grid, start, goal, **kwargs):
     came_from = kwargs['came_from'] if 'came_from' in kwargs else dict()
     g_score = kwargs['g_score'] if 'g_score' in kwargs else dict()
     f_score = kwargs['f_score'] if 'f_score' in kwargs else dict()
+    # augmented occ values, if and only if not given in parameters, we'll preprocess the map and generate it
+    augmented_occ = kwargs['augmented_occ'] if 'augmented_occ' in kwargs else preprocess_map(map_grid)
     open_heap = []  # priority queue for fast retrieval of the open point with the smallest f_score
-    augmented_occ = preprocess_map(map_grid)  # augmented occ values
 
     # convert back to simple sequence
     start_seq = (start.x, start.y)
