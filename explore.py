@@ -12,6 +12,7 @@ from geometry_msgs.msg import Twist
 navi_pub = None
 mode = 1
 MinDist = 0.3
+threshold = 0.1
 FindWall = 1
 Align = 2
 FollowWall = 3
@@ -23,12 +24,16 @@ def callback(data):
     global mode
 
     if mode == FindWall:
+        rospy.loginfo("findWall")
         findWall(data)
     elif mode == Align:
+        rospy.loginfo("align")
         align(data)
     elif mode == FollowWall:
+        rospy.loginfo("followWall")
         followWall(data)
     elif mode == Adjust:
+        rospy.loginfo("adjust")
         adjust(data)
 
 
@@ -50,6 +55,7 @@ def findWall(data):
 
 def align(data):
     global mode
+    global threshold
 
     mid = len(data.ranges) / 2
     offset = 256
@@ -69,6 +75,7 @@ def align(data):
 
 def followWall(data):
     global mode
+    global threshold
 
     mid = len(data.ranges) / 2
     offset = 256
@@ -88,14 +95,14 @@ def followWall(data):
 
 def adjust(data):
     global mode
+    global threshold
 
     mid = len(data.ranges) / 2
     offset = 256
     thetaInd = mid + offset
 
     # if not within range then turn robot until in range
-    if (data.ranges[thetaInd] < MinDist + threshold and
-        data.ranges[thetaInd] > MinDist - threshold):
+    if (data.ranges[thetaInd] > MinDist + threshold):
         moveCmd = Twist()
         moveCmd.linear.x = 0
         moveCmd.angular.z = 0.5
