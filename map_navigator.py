@@ -18,10 +18,9 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import OccupancyGrid
 from assignment1.srv import *
 
-from assignment1.msg import *
-
 from search_path import a_star_search
 from search_path import preprocess_map
+from search_path import optimize_path
 
 robot_frame = '/base_link'
 robot_control_topic = '/cmd_vel_mux/input/navi'
@@ -29,14 +28,17 @@ map_topic = '/map'
 map_frame = '/map'
 working_frequency = 10  # hz
 angle_close_threshold = math.radians(3)
+angle_watch_area = math.radians(60)
 speed_angular_base = 0.2
-speed_angular_haste = 1.0
+speed_angular_haste = 2.0
+speed_angular_watch = 0.5
 speed_linear_base = 0.2
 speed_linear_log_haste = 0.5
 
 tf_listener = None
 nav_pub = None
 current_goal = None
+current_goal_angle = None
 current_map = None
 last_goal = None
 last_map = None
@@ -47,25 +49,35 @@ last_robot_point = None
 goal_lock = RLock()
 
 
-def set_goal(goal):
-    global current_goal
+def set_goal(goal, angle):
+    global current_goal, current_goal_angle
     with goal_lock:
-        if goal is None:
+        if goal is None or angle is None:
             current_goal = None
+            current_goal_angle = None
             rospy.loginfo('Navigation goal has been cleared')
         else:
             current_goal = (goal.x, goal.y)  # convert back to normal sequence
-            rospy.loginfo('New navigation goal has been set: (%d, %d)' % (goal.x, goal.y))
+            current_goal_angle = angle
+            if angle < -math.pi or angle > math.pi:
+                current_goal_angle = 0.0
+                rospy.logwarn('Bad angle parameter: %f, reset to %f' % (angle, current_goal_angle))
+            rospy.loginfo('New navigation goal has been set: (%d, %d) angle=%f degree' %
+                          (goal.x, goal.y, math.degrees(angle)))
 
 
 def handle_start_navigation(request):
-    set_goal(request.goal)
+    if request.stop:
+        set_goal(None, None)
+    else:
+        set_goal(request.goal, request.angle)
     return StartNavigationResponse()
 
 
 def map_received(map_grid):
     global current_map
-    current_map = map_grid
+    with goal_lock:
+        current_map = map_grid
 
 
 def move_robot(linear, angular):
@@ -75,24 +87,28 @@ def move_robot(linear, angular):
     nav_pub.publish(action)
 
 
-def preprocess_path(path):
-    new_path = []
-    last_point = None
-    last_angle = None
-    is_start_point = True
-    for way_point in path:
-        point = (way_point.x, way_point.y)  # convert back to normal sequence
-        if is_start_point:
-            is_start_point = False
-        else:
-            current_angle = math.atan2(point[1] - last_point[1], point[0] - last_point[0])
-            if last_angle is not None and math.fabs(last_angle - current_angle) < angle_close_threshold:
-                new_path.pop()
-            else:
-                last_angle = current_angle
-        last_point = point
-        new_path.append(point)
-    return new_path
+def get_angle_diff(angle_a, angle_b):
+    """Get the normalized angle difference between two normalized angles.
+    Normalized angles should be in the range of (-pi, pi]
+    """
+    delta_angle = angle_a - angle_b
+    if delta_angle > math.pi:
+        delta_angle -= math.pi * 2
+    elif delta_angle <= -math.pi:
+        delta_angle += math.pi * 2
+    return delta_angle
+
+
+def adjust_angle(robot_angle, target_angle):
+    """Adjust the robot's angle and return True when adjustment has been finished"""
+    delta_angle = get_angle_diff(robot_angle, target_angle)
+    if delta_angle < -angle_close_threshold:
+        move_robot(0, speed_angular_base + (-delta_angle) / math.pi * speed_angular_haste)
+    elif delta_angle > angle_close_threshold:
+        move_robot(0, -speed_angular_base - delta_angle / math.pi * speed_angular_haste)
+    else:
+        return True
+    return False
 
 
 def start_navigator():
@@ -107,7 +123,7 @@ def start_navigator():
     rospy.loginfo('Map Navigator node started')
     rate = rospy.Rate(working_frequency)
     while not rospy.is_shutdown():
-        if current_goal is not None and current_map is not None:
+        if current_goal is not None and current_map is not None and current_goal_angle is not None:
             with goal_lock:
                 try:
                     t = tf_listener.getLatestCommonTime(map_frame, robot_frame)
@@ -127,48 +143,49 @@ def start_navigator():
                     last_map_augmented_occ = preprocess_map(current_map)
                 if last_map != current_map or last_goal != current_goal:
                     print 'Running a*...'
-                    last_path = a_star_search(current_map, WayPoint(robot_point[0], robot_point[1]),
-                                              WayPoint(current_goal[0], current_goal[1]),
-                                              augmented_occ=last_map_augmented_occ)
+                    last_path = a_star_search(current_map, last_map_augmented_occ, robot_point, current_goal)
                     print 'Returned path length: %d' % len(last_path)
                     if len(last_path) == 0:
                         rospy.logwarn('Failed to find a path from (%d, %d) to (%d, %d)' %
                                       (robot_point[0], robot_point[1], current_goal[0], current_goal[1]))
+                        last_target_point = None
                     else:
-                        last_path = preprocess_path(last_path)
+                        last_path = optimize_path(current_map, last_map_augmented_occ, last_path)
                         print 'Optimized path length: %d' % len(last_path)
                         last_target_point = last_path.pop()  # pop first target point (start point)
                         print 'Start point %s' % str(last_target_point)
                 last_goal = current_goal
                 last_map = current_map
+                # keep while structure in case we want to change equality check to similarity check
                 while robot_point == last_target_point:
                     if len(last_path) > 0:
                         last_target_point = last_path.pop()  # pop next target point
                         print 'Next target point %s' % str(last_target_point)
                         print 'Point remains: %d' % len(last_path)
+                        if last_target_point[0] == -1:  # need to activate watch mode when first meet "broken" point
+                            print 'Unknown area ahead, wait and watch %f degree' % math.degrees(last_target_point[1])
+                            move_robot(0, speed_angular_watch)
                     else:
                         last_target_point = None
                         break
+                robot_angle = euler_from_quaternion(quaternion)[2]
                 if last_target_point is None:
-                    rospy.loginfo('Navigation finished!')
-                    set_goal(None)
-                    move_robot(0, 0)
-                else:
+                    if adjust_angle(robot_angle, current_goal_angle):
+                        rospy.loginfo('Navigation finished!')
+                        set_goal(None, None)
+                        move_robot(0, 0)
+                elif last_target_point[0] == -1:  # watch mode
+                    delta_angle = get_angle_diff(robot_angle, last_target_point[1])
+                    if delta_angle < -angle_watch_area / 2:
+                        move_robot(0, speed_angular_watch)
+                    elif delta_angle > angle_watch_area / 2:
+                        move_robot(0, -speed_angular_watch)
+                else:  # move to target point
                     dx = (last_target_point[0] + 0.5) * resolution - transform[0]
                     dy = (last_target_point[1] + 0.5) * resolution - transform[1]
                     dist = math.sqrt(dx * dx + dy * dy)
-                    robot_angle = euler_from_quaternion(quaternion)[2]
                     target_angle = math.atan2(dy, dx)
-                    delta_angle = robot_angle - target_angle
-                    if delta_angle > math.pi:
-                        delta_angle -= math.pi * 2
-                    elif delta_angle < -math.pi:
-                        delta_angle += math.pi * 2
-                    if delta_angle < -angle_close_threshold:
-                        move_robot(0, speed_angular_base + (-delta_angle) / math.pi * speed_angular_haste)
-                    elif delta_angle > angle_close_threshold:
-                        move_robot(0, -speed_angular_base - delta_angle / math.pi * speed_angular_haste)
-                    else:
+                    if adjust_angle(robot_angle, target_angle):
                         move_robot(speed_linear_base + math.log(1 + dist, 2) * speed_linear_log_haste, 0)
         rate.sleep()
 

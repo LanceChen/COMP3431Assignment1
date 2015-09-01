@@ -15,10 +15,11 @@ import rospy
 from nav_msgs.msg import OccupancyGrid
 from assignment1.msg import *
 from assignment1.srv import *
+
 from constants import robot_radius
 
 occ_threshold = 60
-safety_margin = 0.5
+safety_margin_percentage = 0.3
 inf = float('inf')
 
 
@@ -32,18 +33,15 @@ def euclidean_distance(x1, y1, x2, y2):
 def map_distance(map_grid, augmented_occ, start, end):
     """Get the map distance between start point and end point.
 
-    If occupancy >= occ_threshold, it will return Infinity, otherwise return the euclidean distance.
+    If the end point is visitable, it will return Infinity, otherwise return the euclidean distance.
     @type map_grid: OccupancyGrid
     @type start: (int, int)
     @type end: (int, int)
     """
-    w = map_grid.info.width
-    goal_occ = map_grid.data[end[1] * w + end[0]]
-    if goal_occ >= occ_threshold:
+    if not is_visitable_point(map_grid, augmented_occ, end):
         return inf
-    if end in augmented_occ and augmented_occ[end] >= occ_threshold:
-        return inf
-    return euclidean_distance(start[0], start[1], end[0], end[1])
+    else:
+        return euclidean_distance(start[0], start[1], end[0], end[1])
 
 
 def cost_estimate(start, end):
@@ -62,11 +60,31 @@ def reconstruct_path(came_from, current):
     @type came_from: dict
     @type current: (int, int)
     """
-    total_path = [WayPoint(current[0], current[1])]
+    total_path = [current]
     while current in came_from:
         current = came_from[current]
-        total_path.append(WayPoint(current[0], current[1]))
+        total_path.append(current)
     return total_path
+
+
+def is_visitable_point(map_grid, augmented_occ, point, allow_unknown=True):
+    """Check if a point is visitable.
+    A point is not visitable if its occ(or augmented_occ) >= occ_threshold. When allow_unknown is False, it's not
+    visitable either if its occ(or augmented_occ) == -1, otherwise -1 will be treated as normal occ value (means always
+    <= threshold)
+    """
+    occ = map_grid.data[point[1] * map_grid.info.width + point[0]]
+    if not allow_unknown and occ == -1:
+        return False
+    if occ >= occ_threshold:
+        return False
+    if point in augmented_occ:
+        aug_occ = augmented_occ[point]
+        if not allow_unknown and aug_occ == -1:
+            return False
+        if aug_occ >= occ_threshold:
+            return False
+    return True
 
 
 def is_valid_point(map_grid, point):
@@ -91,7 +109,7 @@ def neighbour_points(map_grid, point):
     point_y = point[1]
     neighbours = [
         (point_x - 1, point_y - 1), (point_x, point_y - 1), (point_x + 1, point_y - 1),
-        (point_x - 1, point_y), (point_x, point_y), (point_x + 1, point_y),
+        (point_x - 1, point_y), (point_x + 1, point_y),
         (point_x - 1, point_y + 1), (point_x, point_y + 1), (point_x + 1, point_y + 1)
     ]
     return [p for p in neighbours if is_valid_point(map_grid, p)]
@@ -103,48 +121,47 @@ def preprocess_map(map_grid):
     """
     h = map_grid.info.height
     w = map_grid.info.width
-    robot_map_radius = robot_radius / map_grid.info.resolution * (1 + safety_margin)
+    robot_map_radius = robot_radius / map_grid.info.resolution * (1 + safety_margin_percentage)
     robot_map_radius_int = int(math.ceil(robot_map_radius))
+    min_central_distance = robot_map_radius + math.sqrt(2)  # pessimistic calculation (blocks treated as circles)
     augmented_occ = {}
     for i in range(h):
         for j in range(w):
             occ = map_grid.data[i * w + j]
             # for each unsafe point, spread the circular influence area by robot radius
-            if occ >= occ_threshold:
+            if occ == -1 or occ >= occ_threshold:
                 min_i = max(i - robot_map_radius_int, 0)
                 max_i = min(i + robot_map_radius_int, h - 1)
                 min_j = max(j - robot_map_radius_int, 0)
                 max_j = min(j + robot_map_radius_int, w - 1)
                 points = [(x, y) for x in range(min_j, max_j + 1) for y in range(min_i, max_i + 1)
-                          if euclidean_distance(x, y, j, i) <= robot_map_radius]
+                          if euclidean_distance(x, y, j, i) <= min_central_distance]
                 for p in points:
+                    if occ == -1 and map_grid.data[p[1]*w+p[0]] == -1:
+                        continue
                     if p not in augmented_occ or augmented_occ[p] < occ:
                         augmented_occ[p] = occ
     return augmented_occ
 
 
-def a_star_search(map_grid, start, goal, **kwargs):
+def a_star_search(map_grid, augmented_occ, start, goal, **kwargs):
     """Use A* algorithm to compute the shortest path from the start point to the goal point in the given map.
     @type map_grid: OccupancyGrid
-    @type start: WayPoint
-    @type goal: WayPoint
+    @type augmented_occ: {}
+    @type start: (int,int)
+    @type goal: (int,int)
     """
     closed_set = kwargs['closed_set'] if 'closed_set' in kwargs else set()
     open_set = kwargs['open_set'] if 'open_set' in kwargs else set()
     came_from = kwargs['came_from'] if 'came_from' in kwargs else dict()
     g_score = kwargs['g_score'] if 'g_score' in kwargs else dict()
     f_score = kwargs['f_score'] if 'f_score' in kwargs else dict()
-    # augmented occ values, if and only if not given in parameters, we'll preprocess the map and generate it
-    augmented_occ = kwargs['augmented_occ'] if 'augmented_occ' in kwargs else preprocess_map(map_grid)
     open_heap = []  # priority queue for fast retrieval of the open point with the smallest f_score
 
-    # convert back to simple sequence
-    start_seq = (start.x, start.y)
-    goal_seq = (goal.x, goal.y)
-    g_score[start_seq] = 0
-    f_score[start_seq] = cost_estimate(start_seq, goal_seq)
-    open_set.add(start_seq)
-    heapq.heappush(open_heap, (f_score[start_seq], start_seq))
+    g_score[start] = 0
+    f_score[start] = cost_estimate(start, goal)
+    open_set.add(start)
+    heapq.heappush(open_heap, (f_score[start], start))
 
     # when open set is not empty
     while len(open_heap) > 0:
@@ -155,8 +172,8 @@ def a_star_search(map_grid, start, goal, **kwargs):
         if current_f_score >= inf:
             break
         # if already reach the goal
-        if current_point == goal_seq:
-            return reconstruct_path(came_from, goal_seq)
+        if current_point == goal:
+            return reconstruct_path(came_from, goal)
         # add current point into closed set (do not compute for it any more)
         closed_set.add(current_point)
         # get all valid neighbouring points of current point
@@ -174,12 +191,116 @@ def a_star_search(map_grid, start, goal, **kwargs):
                 # update came_from and scores
                 came_from[neighbour_point] = current_point
                 g_score[neighbour_point] = tentative_g_score
-                f_score[neighbour_point] = tentative_g_score + cost_estimate(neighbour_point, goal_seq)
+                f_score[neighbour_point] = tentative_g_score + cost_estimate(neighbour_point, goal)
                 if not in_open_set:
                     # push it into open set
                     heapq.heappush(open_heap, (f_score[neighbour_point], neighbour_point))
                     open_set.add(neighbour_point)
     return []
+
+
+def get_crossed_points(start_point, end_point):
+    """Get all points crossed over by the line that connects the start point and the end point.
+    This function helps find all the influenced points when a robot go straight from the start point to the end point.
+    For efficiency, this function will be called as a generator.
+    @type start_point: (int, int)
+    @type end_point: (int, int)
+    """
+    dy = end_point[1] - start_point[1]
+    dx = end_point[0] - start_point[0]
+    # for simplicity, we need that start point is at left side, end point is at right side. If they do not meet this
+    # requirement, we simply switch them
+    if dx < 0:
+        dx = -dx
+        dy = -dy
+        start_point, end_point = end_point, start_point
+    if dx == 0:  # special case, need to avoid 0-division error in the "else" logic
+        step_y = 1 if dy >= 0 else -1
+        for y in range(step_y, dy, step_y):  # we can safely ignore y=0 and y=dy here
+            yield (start_point[0], start_point[1] + y)
+    else:  # we must have dx > 0 here
+        step = 1.0 * dy / dx
+        for x in range(0, dx + 1, 1):
+            if x == 0:  # first x
+                start_y = 1 if step >= 0 else -1
+            elif step >= 0:
+                start_y = int(0.5 + step * (x - 0.5))
+            else:
+                start_y = int(-0.5 + step * (x - 0.5))
+            if x == dx:  # last x
+                end_y = dy - 1 if step >= 0 else dy + 1
+            elif step >= 0:
+                end_y = int(math.ceil(0.5 + step * (x + 0.5))) - 1
+            else:
+                end_y = int(math.floor(-0.5 + step * (x + 0.5))) + 1
+            step_y = 1 if step >= 0 else -1
+            for y in range(start_y, end_y + step_y, step_y):
+                yield (start_point[0] + x, start_point[1] + y)
+
+
+def optimize_path(map_grid, augmented_occ, path):
+    """Optimize path list returned from A* (and search path service).
+    It do the following optimizations:
+        1. Remove all the redundant middle points in the path, which will make it easier for the robot to follow, make
+            the total path length even shorter, and still keep the path safe
+        2. Mark the first unknown point (occ = -1) in the path and cut out the remaining points
+    """
+    if len(path) <= 0:
+        return []
+    new_path = []
+    last_start_point = None
+    last_end_point = None
+    is_start_point = True
+    width = map_grid.info.width
+    point_index = len(path) - 1
+    while point_index >= 0:
+        point = path[point_index]
+        if is_start_point:
+            is_start_point = False
+            last_start_point = point
+            new_path.append(point)  # starting point is always returned
+        else:
+            # A* treats the unknown area as normal empty space to estimate the currently most likely best path (rather
+            # than returns no path), but when we move the robot, we need to let it stand still or watch around when it
+            # is about to enter or pass by an unknown area until the map is updated and new path is computed.
+            occ = map_grid.data[point[1] * width + point[0]]
+            if occ == -1 or (point in augmented_occ and augmented_occ[point] == -1):
+                angle_from = last_start_point  # the starting point of the last angle(vector)
+                if last_end_point is not None:
+                    new_path.append(last_end_point)
+                    angle_from = last_end_point
+                    last_end_point = None  # reset last end point to avoid appending it again
+                angle = math.atan2(point[1]-angle_from[1], point[0]-angle_from[0])
+                new_path.append((-1, angle))  # reach unknown point, record last angle and ignore following points
+                break
+            # get all points crossed over by the line that connects the last start point and the last end point, if
+            # there are no obstacles or unknown areas in these points, we may ignore all the middle points between the
+            # last start point and last end point in the A* path list
+            is_safe_line = True
+            for cross_point in get_crossed_points(last_start_point, point):
+                if not is_valid_point(map_grid, cross_point):  # should never happen, but check for safety
+                    rospy.logwarn(
+                        'Tried to access invalid point: (%s) when computing crossed points' % str(cross_point))
+                    is_safe_line = False
+                    break
+                if not is_visitable_point(map_grid, augmented_occ, cross_point, False):
+                    is_safe_line = False
+                    break
+            if is_safe_line:
+                last_end_point = point
+            else:
+                if last_end_point is None:  # just check for safety, this point should always exists when code goes here
+                    rospy.logwarn('Path returned from A* is broken at %s' % str(last_start_point))
+                    return []
+                last_start_point = last_end_point
+                new_path.append(last_end_point)
+                last_end_point = None
+                point_index += 1  # handle current point again in the next iteration since we have a new start point
+        point_index -= 1
+    if last_end_point is not None:  # last point need to be appended
+        new_path.append(last_end_point)
+    new_path.reverse()
+    return new_path
 
 
 def handle_search_path(request):
@@ -190,15 +311,18 @@ def handle_search_path(request):
     rospy.loginfo('Searching shortest path from (%d, %d) to (%d, %d) on a %d * %d map...' %
                   (request.start.x, request.start.y, request.goal.x, request.goal.y,
                    map_info.width, map_info.height))
-    path = a_star_search(request.map, request.start, request.goal)
+    # convert back to normal sequence type
+    start_seq = (request.start.x, request.start.y)
+    goal_seq = (request.goal.x, request.goal.y)
+    augmented_occ = preprocess_map(request.map)
+    path = a_star_search(request.map, augmented_occ, start_seq, goal_seq)
+    path = optimize_path(request.map, augmented_occ, path)
     if len(path) <= 0:
         rospy.logwarn('Search path failed')
     else:
         rospy.loginfo('Found shortest path, length=%d' % len(path))
-        for i in range(len(path)):
-            point = path[i]
-            print '(%d, %d)->' % (point.x, point.y)
-    return SearchPathResponse(path)
+    path_msg = [WayPoint(p[0], p[1]) for p in path]
+    return SearchPathResponse(path_msg)
 
 
 def search_path_server():
