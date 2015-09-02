@@ -215,5 +215,6 @@ def draw_map():
                 )
         last_point = point
 
+
 if __name__ == '__main__':
     start()

@@ -117,6 +117,7 @@ def neighbour_points(map_grid, point):
 
 def get_points_in_radius(center_y, center_x, radius, box_size, map_width, map_height):
     """Get points within the circular area around a center point with a given radius.
+    The center point and points at border will be included.
     This function should be used as a generator to improve efficiency.
     box_size is to further limit the scanning area under a square area around the center point of this size.
     map_width/map_height is to ensure we only get valid points in the map.
@@ -152,7 +153,7 @@ def preprocess_map(map_grid):
                             augmented_occ[p] = occ
                 elif (j, i) not in augmented_occ:
                     for p in get_points_in_radius(i, j, min_central_distance, robot_map_radius_int, w, h):
-                        if map_grid.data[p[1]*w+p[0]] == -1:
+                        if map_grid.data[p[1] * w + p[0]] == -1:
                             augmented_occ[(j, i)] = -1
                             break
     return augmented_occ
@@ -223,7 +224,7 @@ def get_crossed_points(start_point, end_point):
     dy = end_point[1] - start_point[1]
     dx = end_point[0] - start_point[0]
     # for simplicity, we need that start point is at left side, end point is at right side. If they do not meet this
-    # requirement, we simply switch them
+    # requirement, we simply swap them
     if dx < 0:
         dx = -dx
         dy = -dy
@@ -284,7 +285,7 @@ def optimize_path(map_grid, augmented_occ, path):
                     new_path.append(last_end_point)
                     angle_from = last_end_point
                     last_end_point = None  # reset last end point to avoid appending it again
-                angle = math.atan2(point[1]-angle_from[1], point[0]-angle_from[0])
+                angle = math.atan2(point[1] - angle_from[1], point[0] - angle_from[0])
                 new_path.append((-1, angle))  # reach unknown point, record last angle and ignore following points
                 break
             # get all points crossed over by the line that connects the last start point and the last end point, if
