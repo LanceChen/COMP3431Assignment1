@@ -263,9 +263,10 @@ def get_crossed_points(start_point, end_point):
 def optimize_path(map_grid, augmented_occ, path):
     """Optimize path list returned from A* (and search path service).
     It do the following optimizations:
-        1. Remove all the redundant middle points in the path, which will make it easier for the robot to follow, make
+        1. For each point in this path, check if the robot will collide with the unknown area when it goes there, mark
+            the first collision point and the angle pointing to the unknown area, and then cut out the remaining points
+        2. Remove all the redundant middle points in the path, which will make it easier for the robot to follow, make
             the total path length even shorter, and still keep the path safe
-        2. Mark the first unknown point (occ = -1) in the path and cut out the remaining points
     """
     if len(path) <= 0:
         return []
@@ -288,18 +289,20 @@ def optimize_path(map_grid, augmented_occ, path):
             # than returns no path), but when we move the robot, we need to let it stand still or watch around when it
             # is about to enter or pass by an unknown area until the map is updated and new path is computed.
             collide_with_unknown_area = False
+            unknown_point = None
             for p in get_points_in_radius(point[0], point[1], radius, box_size, width, height):
                 if map_grid.data[p[1] * width + p[0]] == -1:
+                    unknown_point = p
                     collide_with_unknown_area = True
                     break
             if collide_with_unknown_area:
-                angle_from = last_start_point  # the starting point of the last angle(vector)
+                last_safe_point = last_start_point
                 if last_end_point is not None:
                     new_path.append(last_end_point)
-                    angle_from = last_end_point
+                    last_safe_point = last_end_point
                     last_end_point = None  # reset last end point to avoid appending it again
-                angle = math.atan2(point[1] - angle_from[1], point[0] - angle_from[0])
-                new_path.append((-1, angle))  # reach unknown point, record last angle and ignore following points
+                angle = math.atan2(unknown_point[1] - last_safe_point[1], unknown_point[0] - last_safe_point[0])
+                new_path.append((-1, angle))  # record the angle to the unknown area and ignore following points
                 break
             # get all points crossed over by the line that connects the last start point and the last end point, if
             # there are no obstacles or unknown areas in these points, we may ignore all the middle points between the

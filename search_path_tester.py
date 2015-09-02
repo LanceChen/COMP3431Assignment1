@@ -24,6 +24,7 @@ __author__ = 'kelvin'
 
 import sys
 import time
+import math
 from colorsys import hls_to_rgb
 import Tkinter
 
@@ -120,6 +121,8 @@ def call_a_star():
         optimized_path = optimize_path(grid, augmented_occ, path)
         time_elapsed = time.clock() - time_start
         print 'Path optimization finished in %ss, optimized length = %d' % (str(time_elapsed), len(optimized_path))
+        if len(optimized_path) > 0 and optimized_path[0][0] == -1:
+            print 'Unknown area direction: %f degree' % math.degrees(optimized_path[0][1])
 
 
 def read_map(map_file):
