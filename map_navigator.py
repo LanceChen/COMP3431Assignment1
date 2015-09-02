@@ -28,12 +28,13 @@ map_topic = '/map'
 map_frame = '/map'
 working_frequency = 10  # hz
 angle_close_threshold = math.radians(3)
-angle_watch_area = math.radians(60)
+angle_watch_area = math.radians(90)
+is_watch_clockwise = True
 speed_angular_base = 0.2
 speed_angular_haste = 2.0
-speed_angular_watch = 0.5
+speed_angular_watch = 0.4
 speed_linear_base = 0.2
-speed_linear_log_haste = 0.5
+speed_linear_log_haste = 0.3
 
 tf_listener = None
 nav_pub = None
@@ -113,7 +114,7 @@ def adjust_angle(robot_angle, target_angle):
 
 def start_navigator():
     global tf_listener, nav_pub, last_map_augmented_occ, last_path, last_goal, last_map, \
-        last_target_point, last_robot_point
+        last_target_point, last_robot_point, is_watch_clockwise
     rospy.init_node('map_navigator', anonymous=True)
     tf_listener = tf.TransformListener()
     rospy.Service('start_navigation', StartNavigation, handle_start_navigation)
@@ -162,9 +163,8 @@ def start_navigator():
                         last_target_point = last_path.pop()  # pop next target point
                         print 'Next target point %s' % str(last_target_point)
                         print 'Point remains: %d' % len(last_path)
-                        if last_target_point[0] == -1:  # need to activate watch mode when first meet "broken" point
+                        if last_target_point[0] == -1:
                             print 'Unknown area ahead, wait and watch %f degree' % math.degrees(last_target_point[1])
-                            move_robot(0, speed_angular_watch)
                     else:
                         last_target_point = None
                         break
@@ -177,9 +177,13 @@ def start_navigator():
                 elif last_target_point[0] == -1:  # watch mode
                     delta_angle = get_angle_diff(robot_angle, last_target_point[1])
                     if delta_angle < -angle_watch_area / 2:
-                        move_robot(0, speed_angular_watch)
+                        is_watch_clockwise = False
                     elif delta_angle > angle_watch_area / 2:
+                        is_watch_clockwise = True
+                    if is_watch_clockwise:
                         move_robot(0, -speed_angular_watch)
+                    else:
+                        move_robot(0, speed_angular_watch)
                 else:  # move to target point
                     dx = (last_target_point[0] + 0.5) * resolution - transform[0]
                     dy = (last_target_point[1] + 0.5) * resolution - transform[1]
