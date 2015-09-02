@@ -115,7 +115,7 @@ def neighbour_points(map_grid, point):
     return [p for p in neighbours if is_valid_point(map_grid, p)]
 
 
-def get_points_in_radius(center_y, center_x, radius, box_size, map_width, map_height):
+def get_points_in_radius(center_x, center_y, radius, box_size, map_width, map_height):
     """Get points within the circular area around a center point with a given radius.
     The center point and points at border will be included.
     This function should be used as a generator to improve efficiency.
@@ -126,9 +126,14 @@ def get_points_in_radius(center_y, center_x, radius, box_size, map_width, map_he
     max_i = min(center_y + box_size, map_height - 1)
     min_j = max(center_x - box_size, 0)
     max_j = min(center_x + box_size, map_width - 1)
+    radius_square = radius * radius
     for x in range(min_j, max_j + 1):
         for y in range(min_i, max_i + 1):
-            if euclidean_distance(x, y, center_x, center_y) <= radius:
+            # we may use function "euclidean_distance", but squared comparison seems more efficient
+            # (save about 25% time)
+            dx = x - center_x
+            dy = y - center_y
+            if dx * dx + dy * dy <= radius_square:
                 yield (x, y)
 
 
@@ -138,25 +143,27 @@ def preprocess_map(map_grid):
     """
     h = map_grid.info.height
     w = map_grid.info.width
-    robot_map_radius = robot_radius / map_grid.info.resolution * (1 + safety_margin_percentage)
-    robot_map_radius_int = int(math.ceil(robot_map_radius))
-    min_central_distance = robot_map_radius + math.sqrt(2)  # pessimistic calculation (blocks treated as circles)
+    radius, box_size = get_influence_area_size(map_grid)
     augmented_occ = {}
     for i in range(h):
         for j in range(w):
             occ = map_grid.data[i * w + j]
             # for each unsafe point, spread the circular influence area by robot radius
-            if occ != -1:
-                if occ >= occ_threshold:
-                    for p in get_points_in_radius(i, j, min_central_distance, robot_map_radius_int, w, h):
-                        if p not in augmented_occ or augmented_occ[p] < occ:
-                            augmented_occ[p] = occ
-                elif (j, i) not in augmented_occ:
-                    for p in get_points_in_radius(i, j, min_central_distance, robot_map_radius_int, w, h):
-                        if map_grid.data[p[1] * w + p[0]] == -1:
-                            augmented_occ[(j, i)] = -1
-                            break
+            if occ != -1 and occ >= occ_threshold:
+                for p in get_points_in_radius(j, i, radius, box_size, w, h):
+                    if p not in augmented_occ or augmented_occ[p] < occ:
+                        augmented_occ[p] = occ
     return augmented_occ
+
+
+def get_influence_area_size(map_grid):
+    """Get the size of the influence area that helps preprocessing map and optimize paths
+    Both the circular and rectangular boundary size will be returned
+    """
+    robot_map_radius = robot_radius / map_grid.info.resolution * (1 + safety_margin_percentage)
+    robot_map_radius_int = int(math.ceil(robot_map_radius))
+    min_central_distance = robot_map_radius + math.sqrt(2)  # pessimistic calculation (blocks treated as circles)
+    return min_central_distance, robot_map_radius_int
 
 
 def a_star_search(map_grid, augmented_occ, start, goal, **kwargs):
@@ -267,6 +274,8 @@ def optimize_path(map_grid, augmented_occ, path):
     last_end_point = None
     is_start_point = True
     width = map_grid.info.width
+    height = map_grid.info.height
+    radius, box_size = get_influence_area_size(map_grid)
     point_index = len(path) - 1
     while point_index >= 0:
         point = path[point_index]
@@ -278,8 +287,12 @@ def optimize_path(map_grid, augmented_occ, path):
             # A* treats the unknown area as normal empty space to estimate the currently most likely best path (rather
             # than returns no path), but when we move the robot, we need to let it stand still or watch around when it
             # is about to enter or pass by an unknown area until the map is updated and new path is computed.
-            occ = map_grid.data[point[1] * width + point[0]]
-            if occ == -1 or (point in augmented_occ and augmented_occ[point] == -1):
+            collide_with_unknown_area = False
+            for p in get_points_in_radius(point[0], point[1], radius, box_size, width, height):
+                if map_grid.data[p[1] * width + p[0]] == -1:
+                    collide_with_unknown_area = True
+                    break
+            if collide_with_unknown_area:
                 angle_from = last_start_point  # the starting point of the last angle(vector)
                 if last_end_point is not None:
                     new_path.append(last_end_point)
