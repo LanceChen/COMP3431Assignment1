@@ -115,6 +115,22 @@ def neighbour_points(map_grid, point):
     return [p for p in neighbours if is_valid_point(map_grid, p)]
 
 
+def get_points_in_radius(center_y, center_x, radius, box_size, map_width, map_height):
+    """Get points within the circular area around a center point with a given radius.
+    This function should be used as a generator to improve efficiency.
+    box_size is to further limit the scanning area under a square area around the center point of this size.
+    map_width/map_height is to ensure we only get valid points in the map.
+    """
+    min_i = max(center_y - box_size, 0)
+    max_i = min(center_y + box_size, map_height - 1)
+    min_j = max(center_x - box_size, 0)
+    max_j = min(center_x + box_size, map_width - 1)
+    for x in range(min_j, max_j + 1):
+        for y in range(min_i, max_i + 1):
+            if euclidean_distance(x, y, center_x, center_y) <= radius:
+                yield (x, y)
+
+
 def preprocess_map(map_grid):
     """Preprocess the map and generate the augmented occ values for some of the points
     @type map_grid: OccupancyGrid
@@ -129,18 +145,16 @@ def preprocess_map(map_grid):
         for j in range(w):
             occ = map_grid.data[i * w + j]
             # for each unsafe point, spread the circular influence area by robot radius
-            if occ == -1 or occ >= occ_threshold:
-                min_i = max(i - robot_map_radius_int, 0)
-                max_i = min(i + robot_map_radius_int, h - 1)
-                min_j = max(j - robot_map_radius_int, 0)
-                max_j = min(j + robot_map_radius_int, w - 1)
-                points = [(x, y) for x in range(min_j, max_j + 1) for y in range(min_i, max_i + 1)
-                          if euclidean_distance(x, y, j, i) <= min_central_distance]
-                for p in points:
-                    if occ == -1 and map_grid.data[p[1]*w+p[0]] == -1:
-                        continue
-                    if p not in augmented_occ or augmented_occ[p] < occ:
-                        augmented_occ[p] = occ
+            if occ != -1:
+                if occ >= occ_threshold:
+                    for p in get_points_in_radius(i, j, min_central_distance, robot_map_radius_int, w, h):
+                        if p not in augmented_occ or augmented_occ[p] < occ:
+                            augmented_occ[p] = occ
+                elif (j, i) not in augmented_occ:
+                    for p in get_points_in_radius(i, j, min_central_distance, robot_map_radius_int, w, h):
+                        if map_grid.data[p[1]*w+p[0]] == -1:
+                            augmented_occ[(j, i)] = -1
+                            break
     return augmented_occ
 
 
