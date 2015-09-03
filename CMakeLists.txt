@@ -8,6 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   nav_msgs
+  sensor_msgs
+  geometry_msgs
   message_generation
 )
 
@@ -54,6 +56,7 @@ add_message_files(
 add_service_files(
   FILES
   SearchPath.srv
+  StartNavigation.srv
 )
 
 ## Generate actions in the 'action' folder

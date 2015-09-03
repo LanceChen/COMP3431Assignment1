@@ -56,7 +56,7 @@ def map_received(map_grid):
     clip_height = max_i - min_i + 1
     print 'Clipped size: %d * %d: ' % (clip_width, clip_height)
     with open(output_file, 'w') as f:
-        f.write("%d %d\n" % (clip_width, clip_height))
+        f.write("%d %d %f\n" % (clip_width, clip_height, map_grid.info.resolution))
         for i in range(min_i, max_i + 1):
             for j in range(min_j, max_j + 1):
                 f.write("%d " % map_grid.data[i * width + j])
