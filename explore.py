@@ -1,114 +1,96 @@
 #!/usr/bin/env python
 
- 
 
 import rospy
 import tf
-import math
+import time
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
 
 navi_pub = None
-mode = 1
-MinDist = 0.3
-threshold = 0.1
-FindWall = 1
-Align = 2
-FollowWall = 3
-Adjust = 4
+MinDist = 0.4
+MaxDist = 0.8
+prev = None
+Close = 0
+Far = 1
+Other = 2
 
 # 0.5 angular = 14 seconds revolution
 
+def move(x, z):
+    moveCmd = Twist()
+    moveCmd.linear.x = x
+    moveCmd.angular.z = z
+    navi_pub.publish(moveCmd)
+
+
+def getThetaInd(data):
+    mid = len(data.ranges) / 2
+    offset = 256
+    thetaInd = mid + offset
+    return thetaInd
+
+
+def tooClose(data):
+    close = False
+    thetaInd = getThetaInd(data)
+
+    if data.ranges[thetaInd] < MinDist:
+        close = True
+
+    return close
+
+
+def tooFar(data):
+    far = False
+    thetaInd = getThetaInd(data)
+
+    if data.ranges[thetaInd] > MaxDist:
+        far = True
+
+    return far
+
+
+def wallAhead(data):
+    ahead = False
+    mid = len(data.ranges) / 2
+
+    if data.ranges[mid] < MinDist:
+        ahead = True
+
+    return ahead
+
+
 def callback(data):
-    global mode
+    global prev
 
-    if mode == FindWall:
-        rospy.loginfo("findWall")
-        findWall(data)
-    elif mode == Align:
-        rospy.loginfo("align")
-        align(data)
-    elif mode == FollowWall:
-        rospy.loginfo("followWall")
-        followWall(data)
-    elif mode == Adjust:
-        rospy.loginfo("adjust")
-        adjust(data)
-
-
-def findWall(data):
-    global mode
-
-    # check if we're within range of wall
-    for i in range(len(data.ranges)):
-        if data.ranges[i] < MinDist:
-            mode = Align
-
-    # else go forward
-    if mode == FindWall:
-        moveCmd = Twist()
-        moveCmd.linear.x = 0.1
-        moveCmd.angular.z = 0
-        navi_pub.publish(moveCmd)
-
-
-def align(data):
-    global mode
-    global threshold
-
-    mid = len(data.ranges) / 2
-    offset = 256
-    thetaInd = mid + offset
-    threshold = 0.1
-
-    # if we are aligned then follow the wall, else rotate
-    if (data.ranges[thetaInd] < MinDist + threshold and
-        data.ranges[thetaInd] > MinDist - threshold):
-        mode = FollowWall
+    # if robot too close to the wall then turn left
+    # if the robot is too far from the wall turn right
+    # otherwise go straight
+    # also if we are at corner
+    # (switching between tooClose and tooFar quickly)
+    # then just move forward for short time to get out of infinite loop
+    if (wallAhead(data)):
+        move(0, -0.5) # turn right
+        prev = Other
+    elif (tooClose(data)):
+        if prev == Far:
+            move(0.1, 0) # just go forward
+            #time.sleep(1)
+        else:
+            move(0, -0.5) # turn right
+        prev = Close
+    elif (tooFar(data)):
+        if prev == Close:
+            move(0.1, 0) # just go forward
+            #time.sleep(1)
+        else:
+            move(0, 0.5) # turn right
+        prev = Far
     else:
-        moveCmd = Twist()
-        moveCmd.linear.x = 0
-        moveCmd.angular.z = 0.5
-        navi_pub.publish(moveCmd)
-
-
-def followWall(data):
-    global mode
-    global threshold
-
-    mid = len(data.ranges) / 2
-    offset = 256
-    thetaInd = mid + offset
-
-    # if within wall range then keep moving forward
-    # else adjust
-    if (data.ranges[thetaInd] < MinDist + threshold and
-        data.ranges[thetaInd] > MinDist - threshold):
-        moveCmd = Twist()
-        moveCmd.linear.x = 0.1
-        moveCmd.angular.z = 0
-        navi_pub.publish(moveCmd)
-    else:
-        mode = Adjust
-
-
-def adjust(data):
-    global mode
-    global threshold
-
-    mid = len(data.ranges) / 2
-    offset = 256
-    thetaInd = mid + offset
-
-    # if not within range then turn robot until in range
-    if (data.ranges[thetaInd] > MinDist + threshold):
-        moveCmd = Twist()
-        moveCmd.linear.x = 0
-        moveCmd.angular.z = 0.5
-        navi_pub.publish(moveCmd)
-    else:
-        mode = FollowWall
+        move(0.1, 0) # just go forward
+        prev = Other
 
 
 # http://answers.ros.org/question/31815/getting-coordinates-of-turtlebot/
