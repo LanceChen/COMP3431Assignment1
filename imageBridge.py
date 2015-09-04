@@ -19,6 +19,7 @@ class image_converter:
   def callback(self,data):
     try:
       cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+      checkForBeacons(cv_image)
     except CvBridgeError, e:
       print e
 
@@ -39,3 +40,16 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
+
+def checkForBeacons(image):
+   pinkBoundaries = [(70, 10, 160), (210, 150, 255)]
+   
+   im = cv2.imread(image)
+   rows, cols, chs = cv2.im.shape
+   region = im[0:(rows/2), 0:cols]
+
+   lower = np.array(pinkBoundaries[0], "uint8")
+   upper = np.array(pinkBoundaries[1], "uint8")
+   mask = cv2.inRange(region, lower, upper)
+
+
