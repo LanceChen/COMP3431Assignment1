@@ -17,9 +17,11 @@ from assignment1.msg import *
 from assignment1.srv import *
 
 from constants import robot_radius
+from constants import max_map_size
 
 occ_threshold = 60
-safety_margin_percentage = 0.3
+safety_margin_percentage = 0.2
+path_unknown_marker = -1
 inf = float('inf')
 
 
@@ -143,10 +145,16 @@ def preprocess_map(map_grid):
     """
     h = map_grid.info.height
     w = map_grid.info.width
+    res = map_grid.info.resolution
     radius, box_size = get_influence_area_size(map_grid)
+    half_max_map_size_in_cells = int(math.ceil(max_map_size / res / 2))
+    min_i = max(0, h/2 - half_max_map_size_in_cells)
+    max_i = min(h-1, h/2 + half_max_map_size_in_cells + 1)
+    min_j = max(0, w/2 - half_max_map_size_in_cells)
+    max_j = min(w-1, w/2 + half_max_map_size_in_cells + 1)
     augmented_occ = {}
-    for i in range(h):
-        for j in range(w):
+    for i in range(min_i, max_i+1):
+        for j in range(min_j, max_j+1):
             occ = map_grid.data[i * w + j]
             # for each unsafe point, spread the circular influence area by robot radius
             if occ != -1 and occ >= occ_threshold:
@@ -302,7 +310,8 @@ def optimize_path(map_grid, augmented_occ, path):
                     last_safe_point = last_end_point
                     last_end_point = None  # reset last end point to avoid appending it again
                 angle = math.atan2(unknown_point[1] - last_safe_point[1], unknown_point[0] - last_safe_point[0])
-                new_path.append((-1, angle))  # record the angle to the unknown area and ignore following points
+                # record the angle to the unknown area and ignore following points
+                new_path.append((path_unknown_marker, angle))
                 break
             # get all points crossed over by the line that connects the last start point and the last end point, if
             # there are no obstacles or unknown areas in these points, we may ignore all the middle points between the
@@ -334,6 +343,43 @@ def optimize_path(map_grid, augmented_occ, path):
     return new_path
 
 
+def convert_way_point_to_map_cell(map_grid, map_point):
+    """
+    @type map_grid: OccupancyGrid
+    @type map_point: WayPoint
+    """
+    origin = map_grid.info.origin.position
+    resolution = map_grid.info.resolution
+    return map_point.x-int(origin.x/resolution), map_point.y-int(origin.y/resolution)
+
+def convert_point_to_map_cell(map_grid, map_point):
+    """
+    @type map_grid: OccupancyGrid
+    @type map_point: (int, int)
+    """
+    origin = map_grid.info.origin.position
+    resolution = map_grid.info.resolution
+    return map_point[0]-int(origin.x/resolution), map_point[1]-int(origin.y/resolution)
+
+def convert_map_cell_to_point(map_grid, cell):
+    """
+    @type map_grid: OccupancyGrid
+    @type cell: (int, int)
+    """
+    origin = map_grid.info.origin.position
+    resolution = map_grid.info.resolution
+    return cell[0]+int(origin.x/resolution), cell[1]+int(origin.y/resolution)
+
+def convert_map_cells_to_way_points(map_grid, cells):
+    """
+    @type map_grid: OccupancyGrid
+    @type cells: [(int, int)]
+    """
+    origin = map_grid.info.origin.position
+    resolution = map_grid.info.resolution
+    return [WayPoint(cell[0]+int(origin.x/resolution), cell[1]+int(origin.y/resolution)) for cell in cells]
+
+
 def handle_search_path(request):
     """Handler function for a single service call.
     @type request: SearchPathRequest
@@ -343,8 +389,8 @@ def handle_search_path(request):
                   (request.start.x, request.start.y, request.goal.x, request.goal.y,
                    map_info.width, map_info.height))
     # convert back to normal sequence type
-    start_seq = (request.start.x, request.start.y)
-    goal_seq = (request.goal.x, request.goal.y)
+    start_seq = convert_way_point_to_map_cell(map_info, request.start)
+    goal_seq = convert_way_point_to_map_cell(map_info, request.goal)
     augmented_occ = preprocess_map(request.map)
     path = a_star_search(request.map, augmented_occ, start_seq, goal_seq)
     path = optimize_path(request.map, augmented_occ, path)
@@ -352,7 +398,7 @@ def handle_search_path(request):
         rospy.logwarn('Search path failed')
     else:
         rospy.loginfo('Found shortest path, length=%d' % len(path))
-    path_msg = [WayPoint(p[0], p[1]) for p in path]
+    path_msg = convert_map_cells_to_way_points(map_info, path)
     return SearchPathResponse(path_msg)
 
 

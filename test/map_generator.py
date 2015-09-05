@@ -22,8 +22,8 @@ def map_received(map_grid):
     """Callback function for receiving map data"""
     width = map_grid.info.width
     height = map_grid.info.height
-    rospy.loginfo('Received map data: width=%d, height=%d, resolution=%f' %
-                  (width, height, map_grid.info.resolution))
+    rospy.loginfo('Received map data: width=%d, height=%d, resolution=%f, origin=%s' %
+                  (width, height, map_grid.info.resolution, str(map_grid.info.origin)))
     min_i = height
     max_i = -1
     min_j = width
@@ -54,6 +54,7 @@ def map_received(map_grid):
         max_j += 1
     clip_width = max_j - min_j + 1
     clip_height = max_i - min_i + 1
+    print 'Clipped range: (%d, %d) - (%d, %d)' % (min_j, min_i, max_j, max_i)
     print 'Clipped size: %d * %d: ' % (clip_width, clip_height)
     with open(output_file, 'w') as f:
         f.write("%d %d %f\n" % (clip_width, clip_height, map_grid.info.resolution))

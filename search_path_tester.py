@@ -33,6 +33,7 @@ from nav_msgs.msg import OccupancyGrid
 from search_path import a_star_search
 from search_path import preprocess_map
 from search_path import optimize_path
+from search_path import path_unknown_marker
 from constants import robot_radius
 
 unit = 20  # pixel per block in the map
@@ -207,7 +208,7 @@ def draw_map():
     last_point = None
     for point in optimized_path:
         if last_point is not None:
-            if last_point[0] == -1:
+            if last_point[0] == path_unknown_marker:
                 canvas.create_text((point[0] + 0.5) * unit, (point[1] + 0.5) * unit,
                                    text='X', font=("Ubuntu", unit), fill='red')
             else:
