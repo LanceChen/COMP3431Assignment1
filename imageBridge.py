@@ -8,6 +8,7 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import operator
+import math
 import beacons
 
 class image_converter:
@@ -101,8 +102,8 @@ def checkForBeacons(image):
       topy = topmost[1]
       bottomy = bottommost[1]
 
-      topRegion = im[leftx:rightx, topy-300:topy]
-      bottomRegion = im[leftx:rightx, bottomy:bottomy+300]
+      topRegion = im[topy-300:topy, leftx:rightx]
+      bottomRegion = im[bottomy:bottomy+300, leftx:rightx]
 
       bc = checkRegion(topRegion, 0)
       if bc.top == 'none':
@@ -110,6 +111,12 @@ def checkForBeacons(image):
       
       if beaconFound(bc) == False:
          #calculate x value
+         d = cols/2
+         alpha = math.atan((cols-d)/d*math.tan(math.radians(61.5)))
+         x,y = locateBeacon(alpha)#call explore service to find beacon location
+         bc.x = x
+         bc.y = y
+         beaconsList.append(bc)
       else:
          pass
 
@@ -154,7 +161,7 @@ def checkRegion(image, region):
 
    for cntGreen in contoursGreen:
       #print (cv2.contourArea(cnt))
-      areas.append((cntNumGreen, cv2.contourArea(cntGreen)))
+      areasGreen.append((cntNumGreen, cv2.contourArea(cntGreen)))
       cntNumGreen = cntNumGreen + 1
    
    contoursBlue, heirarchyBlue = cv2.findContours(maskBlue, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -163,7 +170,7 @@ def checkRegion(image, region):
 
    for cntBlue in contoursBlue:
       #print (cv2.contourArea(cnt))
-      areas.append((cntNumBlue, cv2.contourArea(cntBlue)))
+      areasBlue.append((cntNumBlue, cv2.contourArea(cntBlue)))
       cntNumBlue = cntNumBlue + 1
 
    contoursYellow, heirarchYellow = cv2.findContours(maskYellow, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -172,7 +179,7 @@ def checkRegion(image, region):
 
    for cntYellow in contoursYellow:
       #print (cv2.contourArea(cnt))
-      areas.append((cntNumYellow, cv2.contourArea(cntYellow)))
+      areasYellow.append((cntNumYellow, cv2.contourArea(cntYellow)))
       cntNumYellow = cntNumYellow + 1
    
    bc = Beacons()
