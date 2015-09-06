@@ -2,3 +2,5 @@ WayPoint goal
 float32 angle
 bool ignore_angle
 bool stop
+bool explore_mode
+

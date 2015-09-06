@@ -145,13 +145,8 @@ def preprocess_map(map_grid):
     """
     h = map_grid.info.height
     w = map_grid.info.width
-    res = map_grid.info.resolution
     radius, box_size = get_influence_area_size(map_grid)
-    half_max_map_size_in_cells = int(math.ceil(max_map_size / res / 2))
-    min_i = max(0, h/2 - half_max_map_size_in_cells)
-    max_i = min(h-1, h/2 + half_max_map_size_in_cells + 1)
-    min_j = max(0, w/2 - half_max_map_size_in_cells)
-    max_j = min(w-1, w/2 + half_max_map_size_in_cells + 1)
+    min_i, max_i, min_j, max_j = get_max_map_size_limit(map_grid)
     augmented_occ = {}
     for i in range(min_i, max_i+1):
         for j in range(min_j, max_j+1):
@@ -162,6 +157,18 @@ def preprocess_map(map_grid):
                     if p not in augmented_occ or augmented_occ[p] < occ:
                         augmented_occ[p] = occ
     return augmented_occ
+
+
+def get_max_map_size_limit(map_grid):
+    h = map_grid.info.height
+    w = map_grid.info.width
+    res = map_grid.info.resolution
+    half_max_map_size_in_cells = int(math.ceil(max_map_size / res / 2))
+    min_i = max(0, h / 2 - half_max_map_size_in_cells)
+    max_i = min(h - 1, h / 2 + half_max_map_size_in_cells + 1)
+    min_j = max(0, w / 2 - half_max_map_size_in_cells)
+    max_j = min(w - 1, w / 2 + half_max_map_size_in_cells + 1)
+    return min_i, max_i, min_j, max_j
 
 
 def get_influence_area_size(map_grid):

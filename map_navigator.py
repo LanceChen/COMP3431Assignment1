@@ -18,6 +18,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import OccupancyGrid
 
 from assignment1.srv import *
+from constants import *
 
 from search_path import a_star_search
 from search_path import preprocess_map
@@ -25,6 +26,7 @@ from search_path import optimize_path
 from search_path import convert_point_to_map_cell
 from search_path import convert_way_point_to_map_cell
 from search_path import convert_map_cell_to_point
+from search_path import get_max_map_size_limit
 
 robot_frame = '/base_link'
 robot_control_topic = '/cmd_vel_mux/input/navi'
@@ -54,13 +56,23 @@ last_path_fail = False
 last_watch_angle = 0.0
 is_watch_mode = False
 is_watch_clockwise = True
+is_explore_mode = False
+need_explore_next = True
+map_size_limit = None
+visited_checkpoints = set()
 goal_lock = RLock()
 
 
-def set_goal(goal, angle):
-    global current_goal, current_goal_angle
+def set_goal(goal, angle, explore_mode=False):
+    global current_goal, current_goal_angle, is_explore_mode, need_explore_next
     with goal_lock:
-        if goal is None:
+        is_explore_mode = explore_mode
+        if explore_mode:
+            current_goal = None
+            current_goal_angle = None
+            need_explore_next = True
+            rospy.loginfo('Exploration mode has been activated')
+        elif goal is None:
             current_goal = None
             current_goal_angle = None
             rospy.loginfo('Navigation goal has been cleared')
@@ -76,6 +88,8 @@ def set_goal(goal, angle):
 def handle_start_navigation(request):
     if request.stop:
         set_goal(None, None)
+    elif request.explore_mode:
+        set_goal(None, None, True)
     else:
         angle = request.angle if not request.ignore_angle else None
         set_goal(request.goal, angle)
@@ -118,6 +132,89 @@ def adjust_angle(robot_angle, target_angle):
         return True
     return False
 
+def compute_map_size_limit(map_grid):
+    width = map_grid.info.width
+    height = map_grid.info.height
+    min_i = height
+    max_i = -1
+    min_j = width
+    max_j = -1
+    for i in range(height):
+        for j in range(width):
+            val = map_grid.data[i * width + j]
+            if val == -1:
+                continue
+            if min_i > i:
+                min_i = i
+            if max_i < i:
+                max_i = i
+            if min_j > j:
+                min_j = j
+            if max_j < j:
+                max_j = j
+    if min_i == height:
+        rospy.logwarn('Tried to compute the size limit of an empty map')
+        return 0, width-1, 0, height - 1
+    return min_j, max_j, min_i, max_i
+
+
+def explore_next():
+    global map_size_limit
+    robot_point_cell = convert_point_to_map_cell(current_map, last_robot_point)
+    width = current_map.info.width
+    height = current_map.info.height
+    resolution = current_map.info.resolution
+    min_y, max_y, min_x, max_x = get_max_map_size_limit(current_map)
+    point_not_reachable = (min(max_x, width-1), min(max_y, height-1))
+    if map_size_limit is None:  # when we don't know the outer boundary of the map
+        # check if we know that we cannot reach a point that is in fact not reachable, which means if we've got the
+        # boundary shape of the map
+        if len(a_star_search(current_map, last_map_augmented_occ, robot_point_cell, point_not_reachable)) == 0:
+            map_size_limit = compute_map_size_limit(current_map)
+            print 'Map size limit confirmed: %s - %s' % (
+                str(convert_map_cell_to_point(current_map, (map_size_limit[0], map_size_limit[2]))),
+                str(convert_map_cell_to_point(current_map, (map_size_limit[1], map_size_limit[3])))
+            )
+    checkpoint_size = int(math.ceil(robot_radius / resolution))
+    robot_x = int(round(1.0 * robot_point_cell[0] / checkpoint_size))
+    robot_y = int(round(1.0 * robot_point_cell[1] / checkpoint_size))
+    if map_size_limit is not None:
+        min_x, max_x, min_y, max_y = map_size_limit[0], map_size_limit[1], map_size_limit[2], map_size_limit[3]
+    points_to_check = 4  # find 4 most close checkpoints that need to visit and finally pick the nearest one
+    n = 1
+    nearest_checkpoint_cell = None
+    nearest_checkpoint_path = None
+    nearest_checkpoint_path_length = float('inf')
+    while points_to_check > 0:
+        for m in range(-n+1, n+1):  # [-n+1, n+1)
+            all_out_of_bound = True
+            for px, py in [(robot_x+n, robot_y+m), (robot_x-n, robot_y-m),
+                           (robot_x-m, robot_y+n), (robot_x+m, robot_y-n)]:
+                cell = (px*checkpoint_size, py*checkpoint_size)
+                if min_x <= cell[0] <= max_x and min_y <= cell[1] <= max_y:
+                    all_out_of_bound = False
+                    if (px, py) not in visited_checkpoints:
+                        point = convert_map_cell_to_point(current_map, cell)
+                        print 'Running a* towards ', str(point)
+                        path = a_star_search(current_map, last_map_augmented_occ, robot_point_cell, cell)
+                        path_length = len(path)
+                        print 'Returned path length: %d' % path_length
+                        if path_length == 0:
+                            print 'Failed to find a path from (%d, %d) to (%d, %d)' % \
+                                  (last_robot_point[0], last_robot_point[1], point[0], point[1])
+                            visited_checkpoints.add((px, py))
+                        else:
+                            points_to_check -= 1
+                            if float(path_length) < nearest_checkpoint_path_length:
+                                nearest_checkpoint_cell = cell
+                                nearest_checkpoint_path = path
+                                nearest_checkpoint_path_length = path_length
+
+            if all_out_of_bound:
+                break
+        n += 1
+    return nearest_checkpoint_cell, nearest_checkpoint_path
+
 
 def start_navigator():
     global tf_listener, nav_pub, last_map_augmented_occ, last_path, last_goal, last_map, \
@@ -131,7 +228,7 @@ def start_navigator():
     rospy.loginfo('Map Navigator node started')
     rate = rospy.Rate(working_frequency)
     while not rospy.is_shutdown():
-        if current_goal is not None and current_map is not None:
+        if (current_goal is not None or is_explore_mode) and current_map is not None:
             with goal_lock:
                 try:
                     t = tf_listener.getLatestCommonTime(map_frame, robot_frame)
@@ -149,7 +246,20 @@ def start_navigator():
                 if last_map != current_map:
                     print 'Preprocessing map...'
                     last_map_augmented_occ = preprocess_map(current_map)
-                if last_map != current_map or last_goal != current_goal:
+                if is_explore_mode:
+                    if need_explore_next:
+                        last_path_fail = False
+                        cell, path = explore_next()
+                        if cell is None:
+                            rospy.loginfo('No more points to explore')
+                        else:
+                            print 'Next checkpoint: ', convert_map_cell_to_point(current_map, cell)
+                            print 'Optimizing path...'
+                            last_path = optimize_path(current_map, last_map_augmented_occ, path)
+                            print 'Optimized path length: %d' % len(last_path)
+                            last_target_point = convert_map_cell_to_point(current_map, last_path.pop())
+                            print 'Start point %s' % str(last_target_point)
+                elif last_map != current_map or last_goal != current_goal:
                     print 'Running a*...'
                     current_goal_cell = convert_way_point_to_map_cell(current_map, current_goal)
                     robot_point_cell = convert_point_to_map_cell(current_map, robot_point)
