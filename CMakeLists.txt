@@ -59,6 +59,7 @@ add_service_files(
   FILES
   SearchPath.srv
   StartNavigation.srv
+  StopExplore.srv
 )
 
 ## Generate actions in the 'action' folder
