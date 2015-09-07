@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-global class Beacon:
-   top, bottom, x, y
+class BeaconObject:
+   
    def _init_(self):
-      top = 'none'
-      bottom = 'none'
-      x = 0
-      y = 0
+      self.top = 'none'
+      self.bottom = 'none'
+      self.x = 0
+      self.y = 0
