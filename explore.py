@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
-import rospy
 import math
+
+import rospy
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 from assignment1.srv import *
+
+SERVICE_GET_RANGE_FROM_ANGLE = 'get_range_from_angle'
+SERVICE_STOP_EXPLORE = 'stop_explore'
 
 NaviPub = None
 ForwardVel = 0.2
@@ -70,6 +74,7 @@ def callback(data):
 
 
 # handles the service that stops the turtlebot
+# noinspection PyUnusedLocal
 def handle_stop_explore(request):
     global Done
     rospy.loginfo('Stopped')
@@ -157,8 +162,8 @@ def angle_to_dist(angle, data):
 def main():
     global NaviPub
     rospy.init_node('explorer', anonymous=True)
-    rospy.Service('stop_explore', StopExplore, handle_stop_explore)
-    rospy.Service('get_range_from_angle', GetRangeFromAngle, handle_range_query)
+    rospy.Service(SERVICE_STOP_EXPLORE, StopExplore, handle_stop_explore)
+    rospy.Service(SERVICE_GET_RANGE_FROM_ANGLE, GetRangeFromAngle, handle_range_query)
     NaviPub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
     # noinspection PyTypeChecker
     rospy.Subscriber("/scan", LaserScan, callback)

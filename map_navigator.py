@@ -5,6 +5,8 @@
 A map navigator service that accepts a goal position and then automatically controls the robot to move to the goal point
  along with the computed shortest path.
 """
+SERVICE_START_NAVIGATION = 'start_navigation'
+SERVICE_GENERATE_NAVIGATION_TARGET = 'generate_navigation_target'
 
 __author__ = 'kelvin'
 
@@ -15,6 +17,7 @@ import rospy
 import tf
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Twist
+
 from nav_msgs.msg import OccupancyGrid
 
 from assignment1.msg import *
@@ -153,7 +156,7 @@ def adjust_angle(robot_angle, target_angle):
         move_robot(0, speed_angular_base + (-delta_angle) / math.pi * speed_angular_haste)
     elif delta_angle > angle_close_threshold:
         move_robot(0, -speed_angular_base - delta_angle / math.pi * speed_angular_haste)
-    else:
+    else:# noinspection PyUnusedP
         return True
     return False
 
@@ -163,8 +166,8 @@ def start_navigator():
         last_target_point, last_robot_point, is_watch_clockwise, last_path_fail, is_watch_mode, last_watch_angle
     rospy.init_node('map_navigator')
     tf_listener = tf.TransformListener()
-    rospy.Service('start_navigation', StartNavigation, handle_start_navigation)
-    rospy.Service('generate_navigation_target', GenerateNavigationTarget, handle_generate_nav_target)
+    rospy.Service(SERVICE_START_NAVIGATION, StartNavigation, handle_start_navigation)
+    rospy.Service(SERVICE_GENERATE_NAVIGATION_TARGET, GenerateNavigationTarget, handle_generate_nav_target)
     # noinspection PyTypeChecker
     rospy.Subscriber(map_topic, OccupancyGrid, map_received)
     nav_pub = rospy.Publisher(robot_control_topic, Twist, queue_size=1)
