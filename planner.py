@@ -13,40 +13,47 @@ class planner:
         self.beaconsToSearch = []
         self.foundBeacons = []
         self.visitedBeacons = []
-        self.beaconSubscriber = rospy.Subscriber("beacons found", BeaconList, callback)
-        rospy.init_node('listener', anonymous=True)
+        self.beaconSubscriber = rospy.Subscriber("beacons found", BeaconList, self.callback)
+        rospy.init_node('planner', anonymous=True)
 
     def callback(self):
-        #rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        foundBeacons =  BeaconList.foundBeacons
+        for foundb in BeaconList.foundBeacons:
+            newBeacon = BeaconObject()
+            newBeacon.top = foundb.top
+            newBeacon.bottom = foundb.bottom
+            newBeacon.x = foundb.x
+            newBeacon.y = foundb.y
+            if self.inBeaconsToSearch(newBeacon):
+                self.foundBeacons.append(newBeacon)
 
-    def addSearchBeacon(self, BeaconObject):
-        self.beaconsToSearch.append(BeaconObject)
+    def addSearchBeacon(self, bcObj):
+        self.beaconsToSearch.append(bcObj)
+
+    def addFoundBeacon(self, bcObj):
+        self.foundBeacons.append(bcObj)
+
+    def addVisitedBeacon(self, bcObj):
+        self.visitedBeacons.append(bcObj)
 
     def allBeaconsFound(self):
-        result = False
-        for search in self.beaconsToSearch:
-            for found in self.foundBeacons:
-                if search.top == found.top and search.bottom == found.bottom:
-                    result =True
-                    break
-            if not result:
-                break
-        return result
+        if len(self.beaconsToSearch) == len(self.foundBeacons):
+            return True
+        else:
+            return False
 
     def allBeaconsVisisted(self):
+        if len(self.beaconsToSearch) == len(self.visitedBeacons):
+            return True
+        else:
+            return False
+
+    def inBeaconsToSearch(self, bcObj):
         result = False
-        for search in self.beaconsToSearch:
-            for visited in self.visitedBeacons:
-                if search.top == visited.top and search.bottom == visited.bottom:
-                    result =True
-                    break
-            if not result:
+        for b in self.beaconsToSearch:
+            if b.top == bcObj.top and b.bottom == bcObj.bottom:
+                result = True
                 break
         return result
-
-    # spin() simply keeps python from exiting until this node is stopped
-    #rospy.spin()
 
 if __name__ == '__main__':
     pl = planner()
@@ -61,5 +68,7 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         if not pl.allBeaconsFound():
             #explore
+            explore
         elif not pl.allBeaconsVisisted():
             #navigate to way points
+            visit
