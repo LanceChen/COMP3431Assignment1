@@ -17,6 +17,8 @@ from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import OccupancyGrid
 
+from assignment1.msg import *
+
 from assignment1.srv import *
 
 from search_path import a_star_search
@@ -25,6 +27,8 @@ from search_path import optimize_path
 from search_path import convert_point_to_map_cell
 from search_path import convert_way_point_to_map_cell
 from search_path import convert_map_cell_to_point
+from search_path import safety_margin_percentage
+from constants import robot_radius
 
 robot_frame = '/base_link'
 robot_control_topic = '/cmd_vel_mux/input/navi'
@@ -86,13 +90,35 @@ def handle_start_navigation(request):
         else:
             # since we cannot use None in Service call, we use a flag to indicate that angles are omitted
             for index, target in enumerate(request.targets):
-                print '=== Target ', (index+1), ' ==='
+                print '=== Target ', (index + 1), ' ==='
                 print target
                 if request.ignore_angle:
                     target.angle = None
             first_target = nav_target_list.pop(0)
             set_goal(first_target.point, first_target.angle)
         return StartNavigationResponse()
+
+
+def handle_generate_nav_target(request):
+    """
+    @type request: GenerateNavigationTargetRequest
+    """
+    tf_listener.waitForTransform(map_frame, robot_frame, rospy.Time(), rospy.Duration(5))
+    t = tf_listener.getLatestCommonTime(map_frame, robot_frame)
+    (transform, quaternion) = tf_listener.lookupTransform(map_frame, robot_frame, t)
+    robot_angle = euler_from_quaternion(quaternion)[2]
+    target_angle = robot_angle + request.angle
+    target_point_distance = request.range - robot_radius * (1 + safety_margin_percentage)
+    target_x = transform[0] + math.cos(target_angle) * target_point_distance
+    target_y = transform[1] + math.sin(target_angle) * target_point_distance
+    resolution = current_map.info.resolution
+    point = (int(math.floor(target_x / resolution)), int(math.floor(target_y / resolution)))
+    response = GenerateNavigationTargetResponse()
+    target = NavigationTarget()
+    target.point = WayPoint(point[0], point[1])
+    target.angle = target_angle
+    response.target = target
+    return response
 
 
 def map_received(map_grid):
@@ -138,6 +164,7 @@ def start_navigator():
     rospy.init_node('map_navigator')
     tf_listener = tf.TransformListener()
     rospy.Service('start_navigation', StartNavigation, handle_start_navigation)
+    rospy.Service('generate_navigation_target', GenerateNavigationTarget, handle_generate_nav_target)
     # noinspection PyTypeChecker
     rospy.Subscriber(map_topic, OccupancyGrid, map_received)
     nav_pub = rospy.Publisher(robot_control_topic, Twist, queue_size=1)

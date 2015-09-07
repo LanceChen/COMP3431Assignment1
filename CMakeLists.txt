@@ -60,6 +60,7 @@ add_service_files(
   FILES
   SearchPath.srv
   StartNavigation.srv
+  GenerateNavigationTarget.srv
   StopExplore.srv
 )
 
