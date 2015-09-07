@@ -43,6 +43,7 @@ tf_listener = None
 nav_pub = None
 current_goal = None
 current_goal_angle = None
+nav_target_list = None
 current_map = None
 last_goal = None
 last_map = None
@@ -59,27 +60,39 @@ goal_lock = RLock()
 
 def set_goal(goal, angle):
     global current_goal, current_goal_angle
-    with goal_lock:
-        if goal is None:
-            current_goal = None
-            current_goal_angle = None
-            rospy.loginfo('Navigation goal has been cleared')
-        else:
-            current_goal = goal
-            current_goal_angle = angle
-            if angle is not None and (angle < -math.pi or angle > math.pi):
-                current_goal_angle = 0.0
-                rospy.logwarn('Bad angle parameter: %f, reset to %f' % (angle, current_goal_angle))
-            rospy.loginfo('New navigation goal has been set: (%d, %d) angle=%s' % (goal.x, goal.y, angle))
+    if goal is None:
+        current_goal = None
+        current_goal_angle = None
+        rospy.loginfo('Navigation goal has been cleared')
+    else:
+        current_goal = goal
+        current_goal_angle = angle
+        if angle is not None and (angle < -math.pi or angle > math.pi):
+            current_goal_angle = 0.0
+            rospy.logwarn('Bad angle parameter: %f, reset to %f' % (angle, current_goal_angle))
+        rospy.loginfo('New navigation goal has been set: (%d, %d) angle=%s' % (goal.x, goal.y, angle))
 
 
 def handle_start_navigation(request):
-    if request.stop:
-        set_goal(None, None)
-    else:
-        angle = request.angle if not request.ignore_angle else None
-        set_goal(request.goal, angle)
-    return StartNavigationResponse()
+    """
+    @type request: StartNavigationRequest
+    """
+    global nav_target_list
+    with goal_lock:
+        rospy.loginfo('New navigation list has arrived (length=%d)' % len(request.targets))
+        nav_target_list = request.targets
+        if len(request.targets) <= 0:
+            set_goal(None, None)
+        else:
+            # since we cannot use None in Service call, we use a flag to indicate that angles are omitted
+            for index, target in enumerate(request.targets):
+                print '=== Target ', (index+1), ' ==='
+                print target
+                if request.ignore_angle:
+                    target.angle = None
+            first_target = nav_target_list.pop(0)
+            set_goal(first_target.point, first_target.angle)
+        return StartNavigationResponse()
 
 
 def map_received(map_grid):
@@ -206,8 +219,14 @@ def start_navigator():
                         else:
                             move_robot(0, speed_angular_watch)
                     elif current_goal_angle is None or adjust_angle(robot_angle, current_goal_angle):
-                        rospy.loginfo('Navigation finished!')
-                        set_goal(None, None)
+                        if len(nav_target_list) > 0:
+                            next_nav_target = nav_target_list.pop(0)
+                            rospy.loginfo('Navigation to (%d, %d) (angle=%f) has been finished!' %
+                                          (current_goal.x, current_goal.y, current_goal_angle))
+                            set_goal(next_nav_target.point, next_nav_target.angle)
+                        else:
+                            rospy.loginfo('Navigation of ALL targets has been finished!')
+                            set_goal(None, None)
                         move_robot(0, 0)
                 else:  # move to target point
                     dx = (last_target_point[0] + 0.5) * resolution - transform[0]

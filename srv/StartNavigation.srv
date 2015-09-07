@@ -1,4 +1,3 @@
-WayPoint goal
-float32 angle
+NavigationTarget[] targets
 bool ignore_angle
-bool stop
+

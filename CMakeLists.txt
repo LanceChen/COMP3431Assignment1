@@ -52,6 +52,7 @@ add_message_files(
   WayPoint.msg
   Beacon.msg
   BeaconList.msg
+  NavigationTarget.msg
 )
 
 ## Generate services in the 'srv' folder
