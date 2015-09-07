@@ -23,6 +23,7 @@ class beacon_finder:
      self.bridge = CvBridge()
      self.image_sub = rospy.Subscriber("/camera/rgb/image_color",Image,self.callback)
      self.beacon_pub = rospy.Publisher('beacon list', BeaconList, queue_size=10)
+     rospy.init_node('beacon_finder', anonymous=True)
      #rate = rospy.Rate(10) # 10hz
      
    def callback(self,data):
@@ -107,12 +108,12 @@ class beacon_finder:
          if not self.isFound(bc):
             #calculate x value
             d = cols/2
-            alpha = math.atan((cols-d)/d*math.tan(math.radians(61.5)))
+            alpha = math.atan((d-cols)/d*math.tan(math.radians(61.5)))
 
             rospy.wait_for_service('locate beacon')
             try:
                locateBeacon = rospy.ServiceProxy('locate beacon', locateBeacon)
-               x,y = locateBeacon(-alpha)
+               x,y = locateBeacon(alpha)
                bc.x = x
                bc.y = y
                beaconsList.append(bc)
@@ -225,7 +226,6 @@ class beacon_finder:
 
 def main(args):
   bf = beacon_finder()
-  rospy.init_node('beacon_finder', anonymous=True)
   try:
     rospy.spin()
   except KeyboardInterrupt:
