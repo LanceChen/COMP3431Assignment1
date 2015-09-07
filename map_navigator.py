@@ -16,6 +16,7 @@ from threading import RLock
 import rospy
 import tf
 from tf.transformations import euler_from_quaternion
+
 from geometry_msgs.msg import Twist
 
 from nav_msgs.msg import OccupancyGrid
@@ -156,7 +157,7 @@ def adjust_angle(robot_angle, target_angle):
         move_robot(0, speed_angular_base + (-delta_angle) / math.pi * speed_angular_haste)
     elif delta_angle > angle_close_threshold:
         move_robot(0, -speed_angular_base - delta_angle / math.pi * speed_angular_haste)
-    else:# noinspection PyUnusedP
+    else:
         return True
     return False
 

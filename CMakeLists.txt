@@ -50,9 +50,9 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   WayPoint.msg
+  NavigationTarget.msg
   Beacon.msg
   BeaconList.msg
-  NavigationTarget.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -63,6 +63,7 @@ add_service_files(
   GenerateNavigationTarget.srv
   StopExplore.srv
   GetRangeFromAngle.srv
+  StopMonitorCamera.srv
 )
 
 ## Generate actions in the 'action' folder

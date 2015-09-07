@@ -77,7 +77,7 @@ def callback(data):
 # noinspection PyUnusedLocal
 def handle_stop_explore(request):
     global Done
-    rospy.loginfo('Stopped')
+    rospy.loginfo('Explore node stopped')
     Done = True
     return StopExploreResponse()
 
@@ -167,7 +167,8 @@ def main():
     NaviPub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
     # noinspection PyTypeChecker
     rospy.Subscriber("/scan", LaserScan, callback)
-    rospy.Rate(10)
+    # TODO: check why failed to "run" when restart this script
+    rospy.loginfo('Explore node started')
     rospy.spin()
 
 

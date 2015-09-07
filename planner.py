@@ -1,74 +1,58 @@
 #!usr/bin/python
 
-import roslib
-import sys
 import rospy
-from beacons import BeaconObject
 from assignment1.msg import *
 from assignment1.srv import *
 
+from explore import SERVICE_STOP_EXPLORE
+from map_navigator import SERVICE_START_NAVIGATION
+from image_recognition import SERVICE_STOP_MONITOR_CAMERA
+from image_recognition import TOPIC_BEACONS_IN_CAMERA
 
-class planner:
-    def _init_(self):
+
+class Planner:
+    def __init__(self):
         self.beaconsToSearch = []
         self.foundBeacons = []
-        self.visitedBeacons = []
-        self.beaconSubscriber = rospy.Subscriber("beacons found", BeaconList, self.callback)
         rospy.init_node('planner', anonymous=True)
+        # noinspection PyTypeChecker
+        self.beaconSubscriber = rospy.Subscriber(TOPIC_BEACONS_IN_CAMERA, BeaconList, self.callback)
+        # wait and initialize proxies for all related services
+        rospy.wait_for_service(SERVICE_STOP_EXPLORE)
+        rospy.wait_for_service(SERVICE_STOP_MONITOR_CAMERA)
+        rospy.wait_for_service(SERVICE_START_NAVIGATION)
+        self.stop_explore = rospy.ServiceProxy(SERVICE_STOP_EXPLORE, StopExplore)
+        self.stop_monitor_camera = rospy.ServiceProxy(SERVICE_STOP_MONITOR_CAMERA, StopMonitorCamera)
+        self.start_navigation = rospy.ServiceProxy(SERVICE_START_NAVIGATION, StartNavigation)
 
-    def callback(self):
-        for foundb in BeaconList.foundBeacons:
-            newBeacon = BeaconObject()
-            newBeacon.top = foundb.top
-            newBeacon.bottom = foundb.bottom
-            newBeacon.x = foundb.x
-            newBeacon.y = foundb.y
-            if self.inBeaconsToSearch(newBeacon):
-                self.foundBeacons.append(newBeacon)
+    def callback(self, beacon_list):
+        """
+        @type beacon_list: BeaconList
+        """
+        for found_bc in beacon_list.foundBeacons:
+            # TODO: add logic to avoid append duplicates
+            if self.in_beacons_to_search(found_bc):
+                self.foundBeacons.append(found_bc)
 
-    def addSearchBeacon(self, bcObj):
-        self.beaconsToSearch.append(bcObj)
+                # TODO check if all beacons found, and call the services here
 
-    def addFoundBeacon(self, bcObj):
-        self.foundBeacons.append(bcObj)
-
-    def addVisitedBeacon(self, bcObj):
-        self.visitedBeacons.append(bcObj)
-
-    def allBeaconsFound(self):
+    def all_beacons_found(self):
         if len(self.beaconsToSearch) == len(self.foundBeacons):
             return True
         else:
             return False
 
-    def allBeaconsVisisted(self):
-        if len(self.beaconsToSearch) == len(self.visitedBeacons):
-            return True
-        else:
-            return False
-
-    def inBeaconsToSearch(self, bcObj):
+    def in_beacons_to_search(self, bc):
         result = False
-        for b in self.beaconsToSearch:
-            if b.top == bcObj.top and b.bottom == bcObj.bottom:
+        for bc_search in self.beaconsToSearch:
+            if bc_search.topColour == bc.topColour and bc_search.bottomColour == bc.bottomColour:
                 result = True
                 break
         return result
 
+
 if __name__ == '__main__':
-    pl = planner()
-
-    for b in sys.argv:
-        colours = b.split(str=",", num=2)
-        newBeacon = BeaconObject()
-        newBeacon.top = colours[0]
-        newBeacon.bottom = colours[1]
-        pl.addSearchBeacon(newBeacon)
-
-    while not rospy.is_shutdown():
-        if not pl.allBeaconsFound():
-            #explore
-            explore
-        elif not pl.allBeaconsVisisted():
-            #navigate to way points
-            visit
+    pl = Planner()
+    # TODO use rospy.get_param to retrieve target beacons, see file '.../comp3431/assign1/launch/demo.launch'
+    rospy.get_param('beacons')
+    rospy.spin()
