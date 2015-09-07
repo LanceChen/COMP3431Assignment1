@@ -17,11 +17,25 @@ Close = 0
 Far = 1
 Other = 2
 Done = False
+latest_laser_scan = None
+
+
+def handle_range_query(request):
+    """Callback function of '/get_range_from_angle' service.
+    It returns the distance/range for the given angle based on the latest laser scan data
+    @type request: GetRangeFromAngleRequest
+    """
+    response = GetRangeFromAngleResponse()
+    response.range = angle_to_dist(request.angle, latest_laser_scan)
+    return response
 
 
 # handle the callback of the explore node
 def callback(data):
-    global Prev
+    global Prev, latest_laser_scan
+    latest_laser_scan = data  # store the latest laser info for range queries
+    if Done:
+        return
 
     # if the wall is ahead then turn right
     # else if we are too close to the wall turn right (accounting for infinite loop bug)
@@ -129,7 +143,7 @@ def int_to_angle(index, data):
 def angle_to_ind(theta, data):
     min_angle = -(3 * math.pi) / 4
     angle_dif = theta - min_angle
-    ind = angle_dif / data.angle_increment
+    ind = int(round(angle_dif / data.angle_increment))
     return ind
 
 
@@ -144,6 +158,7 @@ def main():
     global NaviPub
     rospy.init_node('explorer', anonymous=True)
     rospy.Service('stop_explore', StopExplore, handle_stop_explore)
+    rospy.Service('get_range_from_angle', GetRangeFromAngle, handle_range_query)
     NaviPub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
     # noinspection PyTypeChecker
     rospy.Subscriber("/scan", LaserScan, callback)

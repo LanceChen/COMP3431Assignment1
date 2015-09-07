@@ -62,6 +62,7 @@ add_service_files(
   StartNavigation.srv
   GenerateNavigationTarget.srv
   StopExplore.srv
+  GetRangeFromAngle.srv
 )
 
 ## Generate actions in the 'action' folder
