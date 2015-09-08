@@ -24,6 +24,7 @@ class Planner:
         self.stop_explore = rospy.ServiceProxy(SERVICE_STOP_EXPLORE, StopExplore)
         self.stop_monitor_camera = rospy.ServiceProxy(SERVICE_STOP_MONITOR_CAMERA, StopMonitorCamera)
         self.start_navigation = rospy.ServiceProxy(SERVICE_START_NAVIGATION, StartNavigation)
+        rospy.loginfo('Planner node started')
 
     def callback(self, beacon_list):
         """
@@ -69,13 +70,13 @@ class Planner:
 
 if __name__ == '__main__':
     pl = Planner()
-    # TODO use rospy.get_param to retrieve target beacons, see file '.../comp3431/assign1/launch/demo.launch'
     beacons = rospy.get_param('beacons')
+    str_beacons = ''
     for beacon in beacons:
         new_beacon = Beacon()
         new_beacon.topColour = beacons[beacon]['top']
         new_beacon.bottomColour = beacons[beacon]['bottom']
         pl.beaconsToSearch.append(new_beacon)
-
-    rospy.loginfo("Beacons to search: %s" % str(pl.beaconsToSearch))
+        str_beacons += '{top:%s,bottom:%s} ' % (new_beacon.topColour, new_beacon.bottomColour)
+    rospy.loginfo("Beacons to search: %s" % str_beacons)
     rospy.spin()
