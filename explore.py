@@ -45,6 +45,9 @@ def callback(data):
     # else if we are too close to the wall turn right (accounting for infinite loop bug)
     # else if we are too far from the wall turn left (accounting for infinite loop bug)
     # else we'll just go forward
+#    if almost_hit(data):
+#        move(-ForwardVel, RightVel)
+#        Prev = Other
     if wall_ahead(data):
         move(0, RightVel)
         Prev = Other
@@ -69,8 +72,45 @@ def callback(data):
             move(0, LeftVel)
         Prev = Far
     else:
-        move(ForwardVel, 0)
-        Prev = Other
+        if almost_hit_right(data):
+            move(-ForwardVel, 0.1)
+            Prev = Other
+        elif almost_hit_left(data):
+            move(-ForwardVel, -0.1)
+            Prev = Other
+        else:
+            move(ForwardVel, 0)
+            Prev = Other
+
+
+# checks if about to hit something on right
+def almost_hit_right(data):
+    almost = False
+
+    last = len(data.ranges)
+    mid = last / 2
+
+    for i in range(0, mid):
+        if data.ranges[i] < MinDist / 2:
+            almost = True
+            break
+
+    return almost
+
+
+# checks if about to hit something on left
+def almost_hit_left(data):
+    almost = False
+
+    last = len(data.ranges)
+    mid = last / 2
+
+    for i in range(mid, last):
+        if data.ranges[i] < MinDist / 2:
+            almost = True
+            break
+
+    return almost
 
 
 # handles the service that stops the turtlebot
