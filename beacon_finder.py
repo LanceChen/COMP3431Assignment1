@@ -22,7 +22,7 @@ SERVICE_STOP_MONITOR_CAMERA = 'stop_monitor_camera'
 
 class BeaconFinder:
     def __init__(self):
-        rospy.init_node('beacon_finder', anonymous=True)
+        rospy.init_node('beacon_finder', anonymous=True, log_level=rospy.DEBUG)
         cv2.namedWindow("Image window", 1)
         self.stop_monitor = False
         self.found = []
@@ -53,8 +53,12 @@ class BeaconFinder:
         try:
             self.latestImage = self.bridge.imgmsg_to_cv2(data, "bgr8")
             if not self.processing:
-                self.check_for_beacons(self.latestImage)
                 self.processing = True
+                try:
+                    self.check_for_beacons(self.latestImage)
+                except CvBridgeError, e:
+                    pass
+                self.processing = False
         except CvBridgeError, e:
             print e
 
@@ -66,6 +70,7 @@ class BeaconFinder:
 
     def check_for_beacons(self, im):
         with self.processing_lock:
+            rospy.loginfo("Processing image")
             # images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
             # for i in images:
             #im = cv2.imread(image)
@@ -104,8 +109,8 @@ class BeaconFinder:
             i = 0
             area_threshold = 1000
             beacons_list = []
-
-            while areas[i][1] > area_threshold:
+            rospy.loginfo("Area index:")
+            while i < len(areas) and areas[i][1] > area_threshold:
                 leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
                 rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
                 topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
@@ -148,6 +153,7 @@ class BeaconFinder:
                 else:
                     pass
                 i += 1
+                rospy.loginfo("Increment: %d" % i)
 
             if not rospy.is_shutdown():
                 bl = BeaconList()
@@ -155,7 +161,6 @@ class BeaconFinder:
                 # rospy.loginfo(bl)
                 self.beacon_pub.publish(bl)
                 # rate.sleep()
-            self.processing = False
 
     @staticmethod
     def check_region(image, region):
