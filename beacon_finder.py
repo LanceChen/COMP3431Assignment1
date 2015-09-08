@@ -95,14 +95,14 @@ class BeaconFinder:
         # print(areas)
 
         i = 0
-        area_threshold = 100
+        area_threshold = 1000
         beacons_list = []
 
         while areas[i][1] > area_threshold:
-            leftmost = tuple(contours[i][contours[i][:, :, 0].argmin()][0])
-            rightmost = tuple(contours[i][contours[i][:, :, 0].argmax()][0])
-            topmost = tuple(contours[i][contours[i][:, :, 1].argmin()][0])
-            bottommost = tuple(contours[i][contours[i][:, :, 1].argmax()][0])
+            leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
+            rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
+            topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
+            bottommost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmax()][0])
             print(areas[i][1])
 
             print leftmost
