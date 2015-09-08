@@ -73,10 +73,10 @@ def callback(data):
         Prev = Far
     else:
         if almost_hit_right(data):
-            move(-ForwardVel, 0.1)
+            move(-ForwardVel, 0.2)
             Prev = Other
         elif almost_hit_left(data):
-            move(-ForwardVel, -0.1)
+            move(-ForwardVel, -0.2)
             Prev = Other
         else:
             move(ForwardVel, 0)
@@ -91,7 +91,7 @@ def almost_hit_right(data):
     mid = last / 2
 
     for i in range(0, mid):
-        if data.ranges[i] < MinDist / 2:
+        if data.ranges[i] < MinDist / 2.5:
             almost = True
             break
 
@@ -106,7 +106,7 @@ def almost_hit_left(data):
     mid = last / 2
 
     for i in range(mid, last):
-        if data.ranges[i] < MinDist / 2:
+        if data.ranges[i] < MinDist / 2.5:
             almost = True
             break
 
