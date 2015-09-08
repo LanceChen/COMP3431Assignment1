@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 
-from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 import operator
 import math
 
+from cv_bridge import CvBridge, CvBridgeError
 import rospy
 import cv2
-
 from sensor_msgs.msg import Image
-
 from assignment1.msg import *
 
 from assignment1.srv import *
@@ -90,7 +88,6 @@ class BeaconFinder:
 
         for cnt in contours:
             # print (cv2.contourArea(cnt))
-            # TODO: what is "areas.append((cnt_num, cv2.contourArea(cnt)))hierarchy" intended to do?
             areas.append((cnt_num, cv2.contourArea(cnt)))
             cnt_num += 1
 
@@ -129,7 +126,6 @@ class BeaconFinder:
                 # calculate x value
                 d = cols / 2
                 alpha = math.atan((d - cols) / d * math.tan(math.radians(61.5)))
-                # TODO: assume alpha is the angle to the target beacon (middle 0, left +, right -)
                 try:
                     get_range_request = GetRangeFromAngleRequest()
                     get_range_request.angle = alpha
