@@ -33,6 +33,7 @@ class Planner:
 
             if self.in_beacons_to_search(found_bc) and not self.in_found_beacons(found_bc):
                 self.foundBeacons.append(found_bc)
+                rospy.loginfo("Beacon found: %s" % (str(found_bc)))
 
         if self.all_beacons_found():
             self.stop_explore()
@@ -41,7 +42,7 @@ class Planner:
             for visit_bc in self.beaconsToSearch:
                 nav_target = visit_bc.target
                 nav_target_list.append(nav_target)
-            self.start_nagivation(nav_target_list)
+            self.start_navigation(nav_target_list, False)
 
     def all_beacons_found(self):
         if len(self.beaconsToSearch) == len(self.foundBeacons):
@@ -69,5 +70,12 @@ class Planner:
 if __name__ == '__main__':
     pl = Planner()
     # TODO use rospy.get_param to retrieve target beacons, see file '.../comp3431/assign1/launch/demo.launch'
-    rospy.get_param('beacons')
+    beacons = rospy.get_param('beacons')
+    for beacon in beacons:
+        new_beacon = Beacon()
+        new_beacon.topColour = beacons[beacon]['top']
+        new_beacon.bottomColour = beacons[beacon]['bottom']
+        pl.beaconsToSearch.append(new_beacon)
+
+    rospy.loginfo("Beacons to search: %s" % str(pl.beaconsToSearch))
     rospy.spin()

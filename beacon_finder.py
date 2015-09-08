@@ -58,10 +58,10 @@ class BeaconFinder:
                 return True
         return False
 
-    def check_for_beacons(self, image):
+    def check_for_beacons(self, im):
         # images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
         # for i in images:
-        im = cv2.imread(image)
+        #im = cv2.imread(image)
         rows, cols, chs = im.shape
         region = im[0:(rows / 2), 0:cols]
         pink_boundaries = [(120, 60, 210), (210, 150, 255)]
@@ -72,14 +72,14 @@ class BeaconFinder:
         mask = cv2.inRange(region, lower, upper)
         cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
         cv2.imshow("image", np.hstack([mask]))
-        cv2.waitKey(0)
+        #cv2.waitKey(0)
 
         # output = cv2.bitwise_and(im, im, mask = mask)
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
         cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
         cv2.imshow("image", np.hstack([mask]))
-        cv2.waitKey(0)
+        #cv2.waitKey(0)
 
         # print (len(contours))
 
@@ -180,7 +180,7 @@ class BeaconFinder:
         mask_blue = cv2.inRange(image, blue_lower, blue_upper)
         mask_yellow = cv2.inRange(image, yellow_lower, yellow_upper)
 
-        contours_green, hierarchy_green = cv2.findContours(mask_green, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_green, hierarchy_green = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_green = []
         cnt_num_green = 0
 
@@ -189,7 +189,7 @@ class BeaconFinder:
             areas_green.append((cnt_num_green, cv2.contourArea(cntGreen)))
             cnt_num_green += 1
 
-        contours_blue, hierarchy_blue = cv2.findContours(mask_blue, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_blue, hierarchy_blue = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_blue = []
         cnt_num_blue = 0
 
@@ -198,7 +198,7 @@ class BeaconFinder:
             areas_blue.append((cnt_num_blue, cv2.contourArea(cntBlue)))
             cnt_num_blue += 1
 
-        contours_yellow, hierarchy_yellow = cv2.findContours(mask_yellow, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_yellow, hierarchy_yellow = cv2.findContours(mask_yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_yellow = []
         cnt_num_yellow = 0
 
