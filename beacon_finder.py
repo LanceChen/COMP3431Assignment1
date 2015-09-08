@@ -26,6 +26,7 @@ class BeaconFinder:
         cv2.namedWindow("Image window", 1)
         self.stop_monitor = False
         self.found = []
+        self.found_list_lock = RLock()
         self.bridge = CvBridge()
         # noinspection PyTypeChecker
         self.image_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.callback)
@@ -37,9 +38,6 @@ class BeaconFinder:
         self.get_range_from_angle = rospy.ServiceProxy(SERVICE_GET_RANGE_FROM_ANGLE, GetRangeFromAngle)
         self.gen_nav_target = rospy.ServiceProxy(SERVICE_GENERATE_NAVIGATION_TARGET, GenerateNavigationTarget)
         rospy.loginfo('Image recognition node started')
-        self.processing_lock = RLock()
-        self.processing = False
-        self.latestImage = None
 
     # noinspection PyUnusedLocal
     def handle_stop_monitor(self, request):
@@ -51,16 +49,9 @@ class BeaconFinder:
         if self.stop_monitor:
             return
         try:
-            self.latestImage = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            if not self.processing:
-                self.processing = True
-                try:
-                    self.check_for_beacons(self.latestImage)
-                except CvBridgeError, e:
-                    pass
-                self.processing = False
+            self.check_for_beacons(self.bridge.imgmsg_to_cv2(data, "bgr8"))
         except CvBridgeError, e:
-            print e
+            rospy.logerr(e)
 
     def is_found(self, bc):
         for foundBeacons in self.found:
@@ -69,71 +60,71 @@ class BeaconFinder:
         return False
 
     def check_for_beacons(self, im):
-        with self.processing_lock:
-            rospy.loginfo("Processing image")
-            # images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
-            # for i in images:
-            #im = cv2.imread(image)
-            rows, cols, chs = im.shape
-            region = im[0:(rows / 2), 0:cols]
-            pink_boundaries = [(120, 60, 210), (210, 150, 255)]
+        rospy.loginfo("Processing image")
+        # images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
+        # for i in images:
+        #im = cv2.imread(image)
+        rows, cols, chs = im.shape
+        region = im[0:(rows / 2), 0:cols]
+        pink_boundaries = [(120, 60, 210), (210, 150, 255)]
 
-            lower = np.array(pink_boundaries[0], "uint8")
-            upper = np.array(pink_boundaries[1], "uint8")
+        lower = np.array(pink_boundaries[0], "uint8")
+        upper = np.array(pink_boundaries[1], "uint8")
 
-            mask = cv2.inRange(region, lower, upper)
-            cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
-            cv2.imshow("image", np.hstack([mask]))
-            #cv2.waitKey(0)
+        mask = cv2.inRange(region, lower, upper)
+        cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
+        cv2.imshow("image", np.hstack([mask]))
+        #cv2.waitKey(0)
 
-            # output = cv2.bitwise_and(im, im, mask = mask)
-            contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
-            cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
-            cv2.imshow("image", np.hstack([mask]))
-            #cv2.waitKey(0)
+        # output = cv2.bitwise_and(im, im, mask = mask)
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
+        cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
+        cv2.imshow("image", np.hstack([mask]))
+        #cv2.waitKey(0)
 
-            # print (len(contours))
+        # print (len(contours))
 
-            areas = []
-            cnt_num = 0
+        areas = []
+        cnt_num = 0
 
-            for cnt in contours:
-                # print (cv2.contourArea(cnt))
-                areas.append((cnt_num, cv2.contourArea(cnt)))
-                cnt_num += 1
+        for cnt in contours:
+            # print (cv2.contourArea(cnt))
+            areas.append((cnt_num, cv2.contourArea(cnt)))
+            cnt_num += 1
 
-            areas.sort(key=operator.itemgetter(1), reverse=True)
-            # print(areas)
+        areas.sort(key=operator.itemgetter(1), reverse=True)
+        # print(areas)
 
-            i = 0
-            area_threshold = 1000
-            beacons_list = []
-            rospy.loginfo("Area index:")
-            while i < len(areas) and areas[i][1] > area_threshold:
-                leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
-                rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
-                topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
-                bottommost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmax()][0])
-                print(areas[i][1])
+        i = 0
+        area_threshold = 1000
+        beacons_list = []
+        rospy.loginfo("Area index:")
+        while i < len(areas) and areas[i][1] > area_threshold:
+            leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
+            rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
+            topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
+            bottommost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmax()][0])
+            print(areas[i][1])
 
-                print leftmost
-                print rightmost
-                print topmost
-                print bottommost
+            print leftmost
+            print rightmost
+            print topmost
+            print bottommost
 
-                left_x = leftmost[0]
-                right_x = rightmost[0]
-                top_y = topmost[1]
-                bottom_y = bottommost[1]
+            left_x = leftmost[0]
+            right_x = rightmost[0]
+            top_y = topmost[1]
+            bottom_y = bottommost[1]
 
-                top_region = im[top_y - 300:top_y, left_x:right_x]
-                bottom_region = im[bottom_y:bottom_y + 300, left_x:right_x]
+            top_region = im[top_y - 300:top_y, left_x:right_x]
+            bottom_region = im[bottom_y:bottom_y + 300, left_x:right_x]
 
-                bc = self.check_region(top_region, 0)
-                if bc.topColour == 'none':
-                    bc = self.check_region(bottom_region, 1)
+            bc = self.check_region(top_region, 0)
+            if bc.topColour == 'none':
+                bc = self.check_region(bottom_region, 1)
 
+            with self.found_list_lock:  # read-write lock for found list
                 if not self.is_found(bc):
                     # calculate x value
                     d = cols / 2
@@ -152,15 +143,15 @@ class BeaconFinder:
                         print "Service call failed: %s" % e
                 else:
                     pass
-                i += 1
-                rospy.loginfo("Increment: %d" % i)
+            i += 1
+            rospy.loginfo("Increment: %d" % i)
 
-            if not rospy.is_shutdown():
-                bl = BeaconList()
-                bl.foundBeacons = beacons_list
-                # rospy.loginfo(bl)
-                self.beacon_pub.publish(bl)
-                # rate.sleep()
+        if not rospy.is_shutdown():
+            bl = BeaconList()
+            bl.foundBeacons = beacons_list
+            # rospy.loginfo(bl)
+            self.beacon_pub.publish(bl)
+            # rate.sleep()
 
     @staticmethod
     def check_region(image, region):
