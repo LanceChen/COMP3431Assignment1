@@ -1,0 +1,23 @@
+<launch>
+    <rosparam>
+        beacons:
+            beacon0:
+                top:    "pink"
+                bottom: "yellow"
+            beacon1:
+                top:    "pink"
+                bottom: "green"
+            beacon2:
+                top:    "pink"
+                bottom: "blue"
+            beacon3:
+                top:    "blue"
+                bottom: "pink"
+    </rosparam>
+
+	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping"></node>
+	<node pkg="assignment1" type="map_navigator.py" name="map_navigator"></node>
+	<node pkg="assignment1" type="beacon_finder.py" name="beacon_finder"></node>
+	<node pkg="assignment1" type="planner.py" name="planner"></node>
+	<node pkg="assignment1" type="explore.py" name="explore"></node>
+</launch>

@@ -1,4 +1,4 @@
-#!usr/bin/python
+#!/usr/bin/env python
 
 import rospy
 from assignment1.msg import *
