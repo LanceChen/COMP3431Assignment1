@@ -9,6 +9,7 @@ from assignment1.srv import *
 
 SERVICE_GET_RANGE_FROM_ANGLE = 'get_range_from_angle'
 SERVICE_STOP_EXPLORE = 'stop_explore'
+SERVICE_CONTINUE_EXPLORE = 'continue_explore'
 
 NaviPub = None
 ForwardVel = 0.2
@@ -122,6 +123,13 @@ def handle_stop_explore(request):
     return StopExploreResponse()
 
 
+def handle_continue_explore(request):
+    global Done
+    rospy.loginfo('Explore node continues to work')
+    Done = False
+    return ContinueExploreResponse()
+
+
 # determines if there is a wall straight ahead of the turtlebot
 def wall_ahead(data):
     ahead = False
@@ -203,6 +211,7 @@ def main():
     global NaviPub
     rospy.init_node('explorer', anonymous=True)
     rospy.Service(SERVICE_STOP_EXPLORE, StopExplore, handle_stop_explore)
+    rospy.Service(SERVICE_CONTINUE_EXPLORE, ContinueExplore, handle_continue_explore)
     rospy.Service(SERVICE_GET_RANGE_FROM_ANGLE, GetRangeFromAngle, handle_range_query)
     NaviPub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
     # noinspection PyTypeChecker

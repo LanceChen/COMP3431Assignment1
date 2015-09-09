@@ -65,6 +65,7 @@ add_service_files(
   GetRangeFromAngle.srv
   StopMonitorCamera.srv
   BeaconCheat.srv
+  ContinueExplore.srv
 )
 
 ## Generate actions in the 'action' folder
