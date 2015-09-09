@@ -143,7 +143,7 @@ class BeaconFinder:
                 else:
                     pass
             i += 1
-            rospy.loginfo("Increment: %d" % i)0
+            rospy.loginfo("Increment: %d" % i)
 
         if not rospy.is_shutdown():
             bl = BeaconList()
