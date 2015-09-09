@@ -47,7 +47,7 @@ class Planner:
             for visit_bc in self.beaconsToSearch:
                 nav_target = visit_bc.target
                 nav_target_list.append(nav_target)
-            self.start_navigation(nav_target_list)
+            start_navigation(nav_target_list)
 
     def all_beacons_found(self):
         if len(self.beaconsToSearch) == len(self.foundBeacons):
