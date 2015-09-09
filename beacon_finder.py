@@ -72,15 +72,15 @@ class BeaconFinder:
         upper = np.array(pink_boundaries[1], "uint8")
 
         mask = cv2.inRange(region, lower, upper)
-        cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
-        cv2.imshow("image", np.hstack([mask]))
+        #cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
+        #cv2.imshow("image", np.hstack([mask]))
         #cv2.waitKey(0)
 
         # output = cv2.bitwise_and(im, im, mask = mask)
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
-        cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
-        cv2.imshow("image", np.hstack([mask]))
+        #cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
+        #cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
+        #cv2.imshow("image", np.hstack([mask]))
         #cv2.waitKey(0)
 
         # print (len(contours))
@@ -99,18 +99,17 @@ class BeaconFinder:
         i = 0
         area_threshold = 1000
         beacons_list = []
-        rospy.loginfo("Area index:")
         while i < len(areas) and areas[i][1] > area_threshold:
             leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
             rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
             topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
             bottommost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmax()][0])
-            print(areas[i][1])
+            #print(areas[i][1])
 
-            print leftmost
-            print rightmost
-            print topmost
-            print bottommost
+            #print leftmost
+            #print rightmost
+            #print topmost
+            #print bottommost
 
             left_x = leftmost[0]
             right_x = rightmost[0]
@@ -144,7 +143,7 @@ class BeaconFinder:
                 else:
                     pass
             i += 1
-            rospy.loginfo("Increment: %d" % i)
+            rospy.loginfo("Increment: %d" % i)0
 
         if not rospy.is_shutdown():
             bl = BeaconList()
@@ -162,23 +161,11 @@ class BeaconFinder:
         green_lower = np.array(green_boundaries[0], "uint8")
         green_upper = np.array(green_boundaries[1], "uint8")
 
-        # cv2.namedWindow("green mask", cv2.cv.CV_WINDOW_NORMAL)
-        # cv2.imshow("green mask", np.hstack([mask2]))
-        # cv2.waitKey(0)
-
         blue_lower = np.array(blue_boundaries[0], "uint8")
         blue_upper = np.array(blue_boundaries[1], "uint8")
 
-        # cv2.namedWindow("blue mask", cv2.cv.CV_WINDOW_NORMAL)
-        # cv2.imshow("blue mask", np.hstack([mask3]))
-        # cv2.waitKey(0)
-
         yellow_lower = np.array(yellow_boundaries[0], "uint8")
         yellow_upper = np.array(yellow_boundaries[1], "uint8")
-
-        # cv2.namedWindow("yellow mask", cv2.cv.CV_WINDOW_NORMAL)
-        # cv2.imshow("yellow mask", np.hstack([mask4]))
-        # cv2.waitKey(0)
 
         mask_green = cv2.inRange(image, green_lower, green_upper)
         mask_blue = cv2.inRange(image, blue_lower, blue_upper)
@@ -186,47 +173,38 @@ class BeaconFinder:
 
         contours_green, hierarchy_green = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_green = []
-        cnt_num_green = 0
 
         for cntGreen in contours_green:
-            # print (cv2.contourArea(cnt))
-            areas_green.append((cnt_num_green, cv2.contourArea(cntGreen)))
-            cnt_num_green += 1
+            areas_green.append(cv2.contourArea(cntGreen))
 
         contours_blue, hierarchy_blue = cv2.findContours(mask_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_blue = []
-        cnt_num_blue = 0
 
         for cntBlue in contours_blue:
-            # print (cv2.contourArea(cnt))
-            areas_blue.append((cnt_num_blue, cv2.contourArea(cntBlue)))
-            cnt_num_blue += 1
+            areas_blue.append(cv2.contourArea(cntBlue))
 
         contours_yellow, hierarchy_yellow = cv2.findContours(mask_yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_yellow = []
-        cnt_num_yellow = 0
 
         for cntYellow in contours_yellow:
-            # print (cv2.contourArea(cnt))
-            areas_yellow.append((cnt_num_yellow, cv2.contourArea(cntYellow)))
-            cnt_num_yellow += 1
+            areas_yellow.append(cv2.contourArea(cntYellow))
 
         bc = Beacon()
-        if max(areas_green, key=operator.itemgetter(1)) > 1000:
+        if max(areas_green) > 1000:
             if region == 0:
                 bc.topColour = 'green'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'green'
-        elif max(areas_blue, key=operator.itemgetter(1)) > 1000:
+        elif max(areas_blue) > 1000:
             if region == 0:
                 bc.topColour = 'blue'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'blue'
-        elif max(areas_yellow, key=operator.itemgetter(1)) > 1000:
+        elif max(areas_yellow) > 1000:
             if region == 0:
                 bc.topColour = 'yellow'
                 bc.bottomColour = 'pink'
@@ -238,8 +216,6 @@ class BeaconFinder:
             bc.bottomColour = 'none'
 
         return bc
-        # cv2.imshow("Image window", cv_image)
-        # cv2.waitKey(3)
 
 
 def main():
