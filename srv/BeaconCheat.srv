@@ -1,0 +1,5 @@
+string topColour
+string bottomColour
+float32 angle
+---
+string status
