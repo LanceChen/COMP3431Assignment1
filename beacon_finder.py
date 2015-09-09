@@ -92,17 +92,19 @@ class BeaconFinder:
         #List of contour number and areas
         for cnt in contours:
             areas.append((cnt_num, cv2.contourArea(cnt)))
+            rospy.loginfo(cv2.contourArea(cnt))
             cnt_num += 1
 
         #Sort by area
         areas.sort(key=operator.itemgetter(1), reverse=True)
 
         i = 0
-        area_threshold = 100
+        area_threshold = 50
         beacons_list = []
 
         #Only look at contours with areas above a certain threshold
         while i < len(areas) and areas[i][1] > area_threshold:
+            rospy.loginfo(areas[i][1])
             leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
             rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
             topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
@@ -129,7 +131,7 @@ class BeaconFinder:
                 if not self.is_found(bc):
                     #Calculate angle to centre of beacon
                     d = cols / 2
-                    alpha = math.atan((d - cols) / d * math.tan(math.radians(61.5)))
+                    alpha = math.atan((d - (left_x + right_x)/2) / d * math.tan(math.radians(61.5)))
                     rospy.loginfo("Beacon found at %f" % math.degrees(alpha))
                     try:
                         #Get range to beacon
@@ -198,21 +200,21 @@ class BeaconFinder:
 
         bc = Beacon()
         #Check maximum area for contours of each colour
-        if len(areas_green) != 0 and max(areas_green) > 100:
+        if len(areas_green) != 0 and max(areas_green) > 50:
             if region == 0:
                 bc.topColour = 'green'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'green'
-        elif len(areas_blue) != 0 and max(areas_blue) > 100:
+        elif len(areas_blue) != 0 and max(areas_blue) > 50:
             if region == 0:
                 bc.topColour = 'blue'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'blue'
-        elif len(areas_yellow) != 0 and max(areas_yellow) > 100:
+        elif len(areas_yellow) != 0 and max(areas_yellow) > 50:
             if region == 0:
                 bc.topColour = 'yellow'
                 bc.bottomColour = 'pink'
