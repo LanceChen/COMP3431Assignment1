@@ -1,5 +1,6 @@
 nav_msgs/OccupancyGrid map
 WayPoint start
 WayPoint goal
+int32 goal_distance
 ---
 WayPoint[] path

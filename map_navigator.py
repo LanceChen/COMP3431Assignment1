@@ -16,11 +16,8 @@ from threading import RLock
 import rospy
 import tf
 from tf.transformations import euler_from_quaternion
-
 from geometry_msgs.msg import Twist
-
 from nav_msgs.msg import OccupancyGrid
-
 from assignment1.msg import *
 
 from assignment1.srv import *
@@ -32,7 +29,7 @@ from search_path import convert_point_to_map_cell
 from search_path import convert_way_point_to_map_cell
 from search_path import convert_map_cell_to_point
 from search_path import safety_margin_percentage
-from constants import robot_radius
+from constants import robot_radius, beacon_radius
 
 robot_frame = '/base_link'
 robot_control_topic = '/cmd_vel_mux/input/navi'
@@ -51,6 +48,7 @@ tf_listener = None
 nav_pub = None
 current_goal = None
 current_goal_angle = None
+current_goal_distance = None
 nav_target_list = None
 current_map = None
 last_goal = None
@@ -66,19 +64,22 @@ is_watch_clockwise = True
 goal_lock = RLock()
 
 
-def set_goal(goal, angle):
-    global current_goal, current_goal_angle
+def set_goal(goal, angle, goal_distance):
+    global current_goal, current_goal_angle, current_goal_distance
     if goal is None:
         current_goal = None
         current_goal_angle = None
+        current_goal_distance = None
         rospy.loginfo('Navigation goal has been cleared')
     else:
         current_goal = goal
         current_goal_angle = angle
+        current_goal_distance = goal_distance
         if angle is not None and (angle < -math.pi or angle > math.pi):
             current_goal_angle = 0.0
             rospy.logwarn('Bad angle parameter: %f, reset to %f' % (angle, current_goal_angle))
-        rospy.loginfo('New navigation goal has been set: (%d, %d) angle=%s' % (goal.x, goal.y, angle))
+        rospy.loginfo('New navigation goal has been set: (%d, %d) angle=%s goal_distance=%d'
+                      % (goal.x, goal.y, angle, goal_distance))
 
 
 def handle_start_navigation(request):
@@ -90,16 +91,15 @@ def handle_start_navigation(request):
         rospy.loginfo('New navigation list has arrived (length=%d)' % len(request.targets))
         nav_target_list = request.targets
         if len(request.targets) <= 0:
-            set_goal(None, None)
+            set_goal(None, None, None)
         else:
             # since we cannot use None in Service call, we use a flag to indicate that angles are omitted
             for index, target in enumerate(request.targets):
                 print '=== Target ', (index + 1), ' ==='
                 print target
-                if request.ignore_angle:
-                    target.angle = None
             first_target = nav_target_list.pop(0)
-            set_goal(first_target.point, first_target.angle)
+            angle = first_target.angle if not first_target.ignore_angle else None
+            set_goal(first_target.point, angle, first_target.goal_distance)
         return StartNavigationResponse()
 
 
@@ -112,15 +112,16 @@ def handle_generate_nav_target(request):
     (transform, quaternion) = tf_listener.lookupTransform(map_frame, robot_frame, t)
     robot_angle = euler_from_quaternion(quaternion)[2]
     target_angle = robot_angle + request.angle
-    target_point_distance = request.range - robot_radius * (1 + safety_margin_percentage)
-    target_x = transform[0] + math.cos(target_angle) * target_point_distance
-    target_y = transform[1] + math.sin(target_angle) * target_point_distance
+    target_x = transform[0] + math.cos(target_angle) * request.range
+    target_y = transform[1] + math.sin(target_angle) * request.range
     resolution = current_map.info.resolution
     point = (int(math.floor(target_x / resolution)), int(math.floor(target_y / resolution)))
     response = GenerateNavigationTargetResponse()
     target = NavigationTarget()
     target.point = WayPoint(point[0], point[1])
-    target.angle = target_angle
+    target.goal_distance = int(
+        math.ceil((beacon_radius + robot_radius * (1 + safety_margin_percentage)) / resolution)) + 1
+    target.ignore_angle = True
     response.target = target
     return response
 
@@ -164,7 +165,8 @@ def adjust_angle(robot_angle, target_angle):
 
 def start_navigator():
     global tf_listener, nav_pub, last_map_augmented_occ, last_path, last_goal, last_map, \
-        last_target_point, last_robot_point, is_watch_clockwise, last_path_fail, is_watch_mode, last_watch_angle
+        last_target_point, last_robot_point, is_watch_clockwise, last_path_fail, is_watch_mode, last_watch_angle, \
+        current_goal_angle
     rospy.init_node('map_navigator')
     tf_listener = tf.TransformListener()
     rospy.Service(SERVICE_START_NAVIGATION, StartNavigation, handle_start_navigation)
@@ -197,7 +199,8 @@ def start_navigator():
                     print 'Running a*...'
                     current_goal_cell = convert_way_point_to_map_cell(current_map, current_goal)
                     robot_point_cell = convert_point_to_map_cell(current_map, robot_point)
-                    last_path = a_star_search(current_map, last_map_augmented_occ, robot_point_cell, current_goal_cell)
+                    last_path = a_star_search(current_map, last_map_augmented_occ, robot_point_cell, current_goal_cell,
+                                              current_goal_distance)
                     print 'Returned path length: %d' % len(last_path)
                     if len(last_path) > 0:
                         print 'Optimizing path...'
@@ -249,16 +252,21 @@ def start_navigator():
                             move_robot(0, -speed_angular_watch)
                         else:
                             move_robot(0, speed_angular_watch)
-                    elif current_goal_angle is None or adjust_angle(robot_angle, current_goal_angle):
-                        if len(nav_target_list) > 0:
-                            next_nav_target = nav_target_list.pop(0)
-                            rospy.loginfo('Navigation to (%d, %d) (angle=%f) has been finished!' %
-                                          (current_goal.x, current_goal.y, current_goal_angle))
-                            set_goal(next_nav_target.point, next_nav_target.angle)
-                        else:
-                            rospy.loginfo('Navigation of ALL targets has been finished!')
-                            set_goal(None, None)
-                        move_robot(0, 0)
+                    else:
+                        if current_goal_angle is None and current_goal_distance > 0:
+                            current_goal_angle = math.atan2(current_goal.y - robot_point[1],
+                                                            current_goal.x - robot_point[0])
+                        if current_goal_angle is None or adjust_angle(robot_angle, current_goal_angle):
+                            if len(nav_target_list) > 0:
+                                next_nav_target = nav_target_list.pop(0)
+                                rospy.loginfo('Navigation to (%d, %d) (angle=%f) has been finished!' %
+                                              (current_goal.x, current_goal.y, current_goal_angle))
+                                angle = next_nav_target.angle if not next_nav_target.ignore_angle else None
+                                set_goal(next_nav_target.point, angle, next_nav_target.goal_distance)
+                            else:
+                                rospy.loginfo('Navigation of ALL targets has been finished!')
+                                set_goal(None, None, None)
+                                move_robot(0, 0)
                 else:  # move to target point
                     dx = (last_target_point[0] + 0.5) * resolution - transform[0]
                     dy = (last_target_point[1] + 0.5) * resolution - transform[1]
