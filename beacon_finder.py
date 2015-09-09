@@ -72,7 +72,7 @@ class BeaconFinder:
         region = im[0:(rows / 2), 0:cols]
 
         #HSV lower and upper range for pink
-        pink_boundaries = [(168, 71, 82), (163, 41, 100)]
+        pink_boundaries = [(168, 181, 209), (163, 105, 255)]
 
         lower = np.array(pink_boundaries[0], "uint8")
         upper = np.array(pink_boundaries[1], "uint8")
@@ -160,9 +160,9 @@ class BeaconFinder:
     #Check region for colour, create beacon object
     def check_region(image, region):
         #HSV lower and upper range for green, blue and yellow
-        green_boundaries = [(83, 100, 31), (84, 91, 43)]
-        blue_boundaries = [(100, 100, 59), (100, 76, 98)]
-        yellow_boundaries = [(27, 100, 63), (28, 73, 100)]
+        green_boundaries = [(83, 255, 79), (84, 232, 110)]
+        blue_boundaries = [(100, 255, 150), (100, 194, 250)]
+        yellow_boundaries = [(27, 255, 161), (28, 186, 255)]
 
         green_lower = np.array(green_boundaries[0], "uint8")
         green_upper = np.array(green_boundaries[1], "uint8")
