@@ -14,6 +14,7 @@ import heapq
 import rospy
 from nav_msgs.msg import OccupancyGrid
 from assignment1.msg import *
+
 from assignment1.srv import *
 
 from constants import robot_radius
@@ -148,13 +149,13 @@ def preprocess_map(map_grid):
     res = map_grid.info.resolution
     radius, box_size = get_influence_area_size(map_grid)
     half_max_map_size_in_cells = int(math.ceil(max_map_size / res / 2))
-    min_i = max(0, h/2 - half_max_map_size_in_cells)
-    max_i = min(h-1, h/2 + half_max_map_size_in_cells + 1)
-    min_j = max(0, w/2 - half_max_map_size_in_cells)
-    max_j = min(w-1, w/2 + half_max_map_size_in_cells + 1)
+    min_i = max(0, h / 2 - half_max_map_size_in_cells)
+    max_i = min(h - 1, h / 2 + half_max_map_size_in_cells + 1)
+    min_j = max(0, w / 2 - half_max_map_size_in_cells)
+    max_j = min(w - 1, w / 2 + half_max_map_size_in_cells + 1)
     augmented_occ = {}
-    for i in range(min_i, max_i+1):
-        for j in range(min_j, max_j+1):
+    for i in range(min_i, max_i + 1):
+        for j in range(min_j, max_j + 1):
             occ = map_grid.data[i * w + j]
             # for each unsafe point, spread the circular influence area by robot radius
             if occ != -1 and occ >= occ_threshold:
@@ -174,12 +175,15 @@ def get_influence_area_size(map_grid):
     return min_central_distance, robot_map_radius_int
 
 
-def a_star_search(map_grid, augmented_occ, start, goal, **kwargs):
+def a_star_search(map_grid, augmented_occ, start, goal, goal_range=0, **kwargs):
     """Use A* algorithm to compute the shortest path from the start point to the goal point in the given map.
+    Warning: for sake of efficiency, goal_range checks the rectangular area rather than circular one, and if it's not 0,
+     the returned path is not an optimal one.
     @type map_grid: OccupancyGrid
     @type augmented_occ: {}
     @type start: (int,int)
     @type goal: (int,int)
+    @type goal_range: int
     """
     closed_set = kwargs['closed_set'] if 'closed_set' in kwargs else set()
     open_set = kwargs['open_set'] if 'open_set' in kwargs else set()
@@ -202,8 +206,8 @@ def a_star_search(map_grid, augmented_occ, start, goal, **kwargs):
         if current_f_score >= inf:
             break
         # if already reach the goal
-        if current_point == goal:
-            return reconstruct_path(came_from, goal)
+        if abs(goal[0] - current_point[0]) <= goal_range and abs(goal[1] - current_point[1]) <= goal_range:
+            return reconstruct_path(came_from, current_point)
         # add current point into closed set (do not compute for it any more)
         closed_set.add(current_point)
         # get all valid neighbouring points of current point
@@ -350,7 +354,8 @@ def convert_way_point_to_map_cell(map_grid, map_point):
     """
     origin = map_grid.info.origin.position
     resolution = map_grid.info.resolution
-    return map_point.x-int(origin.x/resolution), map_point.y-int(origin.y/resolution)
+    return map_point.x - int(origin.x / resolution), map_point.y - int(origin.y / resolution)
+
 
 def convert_point_to_map_cell(map_grid, map_point):
     """
@@ -359,7 +364,8 @@ def convert_point_to_map_cell(map_grid, map_point):
     """
     origin = map_grid.info.origin.position
     resolution = map_grid.info.resolution
-    return map_point[0]-int(origin.x/resolution), map_point[1]-int(origin.y/resolution)
+    return map_point[0] - int(origin.x / resolution), map_point[1] - int(origin.y / resolution)
+
 
 def convert_map_cell_to_point(map_grid, cell):
     """
@@ -368,7 +374,8 @@ def convert_map_cell_to_point(map_grid, cell):
     """
     origin = map_grid.info.origin.position
     resolution = map_grid.info.resolution
-    return cell[0]+int(origin.x/resolution), cell[1]+int(origin.y/resolution)
+    return cell[0] + int(origin.x / resolution), cell[1] + int(origin.y / resolution)
+
 
 def convert_map_cells_to_way_points(map_grid, cells):
     """
@@ -377,7 +384,7 @@ def convert_map_cells_to_way_points(map_grid, cells):
     """
     origin = map_grid.info.origin.position
     resolution = map_grid.info.resolution
-    return [WayPoint(cell[0]+int(origin.x/resolution), cell[1]+int(origin.y/resolution)) for cell in cells]
+    return [WayPoint(cell[0] + int(origin.x / resolution), cell[1] + int(origin.y / resolution)) for cell in cells]
 
 
 def handle_search_path(request):
@@ -392,7 +399,7 @@ def handle_search_path(request):
     start_seq = convert_way_point_to_map_cell(map_info, request.start)
     goal_seq = convert_way_point_to_map_cell(map_info, request.goal)
     augmented_occ = preprocess_map(request.map)
-    path = a_star_search(request.map, augmented_occ, start_seq, goal_seq)
+    path = a_star_search(request.map, augmented_occ, start_seq, goal_seq, request.goal_distance)
     path = optimize_path(request.map, augmented_occ, path)
     if len(path) <= 0:
         rospy.logwarn('Search path failed')

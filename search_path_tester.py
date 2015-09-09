@@ -37,6 +37,7 @@ from search_path import path_unknown_marker
 from constants import robot_radius
 
 unit = 20  # pixel per block in the map
+goal_distance = 5  # distance to the goal for A*, default to the (robot_radius+beacon_radius) in map unit
 map_mode = 0  # map mode id
 total_map_modes = 5  # total number of map modes
 canvas = None  # Tkinter canvas for rendering the map
@@ -53,7 +54,8 @@ augmented_occ = None  # augmented occ value matrix, only compute for the first t
 
 def start():
     """Start testing tool"""
-    global unit, start_point, goal_point, grid, closed_set, open_set, came_from, path, canvas, augmented_occ
+    global unit, start_point, goal_point, grid, closed_set, open_set, came_from, path, canvas, augmented_occ, \
+        goal_distance
     # handle param
     if len(sys.argv) < 2:
         print 'Give me map file'
@@ -61,6 +63,8 @@ def start():
     input_map = sys.argv[1]
     if len(sys.argv) > 2:
         unit = int(sys.argv[2])
+    if len(sys.argv) > 3:
+        goal_distance = int(sys.argv[3])
     read_map(input_map)
 
     # preprocess map
@@ -111,8 +115,8 @@ def call_a_star():
     """call A* algorithm"""
     global path, closed_set, open_set, came_from, augmented_occ, optimized_path
     time_start = time.clock()
-    path = a_star_search(grid, augmented_occ, start_point, goal_point, closed_set=closed_set, open_set=open_set,
-                         came_from=came_from)
+    path = a_star_search(grid, augmented_occ, start_point, goal_point, goal_distance, closed_set=closed_set,
+                         open_set=open_set, came_from=came_from)
     time_elapsed = time.clock() - time_start
     if len(path) <= 0:
         sys.stderr.write("Warning: A* returns no result!\n")

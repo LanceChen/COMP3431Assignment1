@@ -6,4 +6,5 @@
 __author__ = 'kelvin'
 
 robot_radius = 0.354 / 2  # unit: meter
+beacon_radius = 0.05  # unit: meter
 max_map_size = 20  # unit: meter
