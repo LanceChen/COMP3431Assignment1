@@ -15,6 +15,8 @@ for i in images:
 
     mask = cv2.inRange(im, lower, upper)
     cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
+    cv2.imshow("image", np.hstack([im]))
+    cv2.waitKey(0)
     cv2.imshow("image", np.hstack([mask]))
     cv2.waitKey(0)
 
