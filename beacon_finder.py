@@ -18,9 +18,12 @@ from map_navigator import SERVICE_GENERATE_NAVIGATION_TARGET
 TOPIC_BEACONS_IN_CAMERA = 'beacon_list'
 SERVICE_STOP_MONITOR_CAMERA = 'stop_monitor_camera'
 
+get_range_from_angle = None
+gen_nav_target = None
 
 class BeaconFinder:
     def __init__(self):
+        global get_range_from_angle, gen_nav_target
         rospy.init_node('beacon_finder', anonymous=True, log_level=rospy.DEBUG)
 
         self.stop_monitor = False
@@ -35,8 +38,8 @@ class BeaconFinder:
         # wait and initialize proxies for all related services
         rospy.wait_for_service(SERVICE_GET_RANGE_FROM_ANGLE)
         rospy.wait_for_service(SERVICE_GENERATE_NAVIGATION_TARGET)
-        self.get_range_from_angle = rospy.ServiceProxy(SERVICE_GET_RANGE_FROM_ANGLE, GetRangeFromAngle)
-        self.gen_nav_target = rospy.ServiceProxy(SERVICE_GENERATE_NAVIGATION_TARGET, GenerateNavigationTarget)
+        get_range_from_angle = rospy.ServiceProxy(SERVICE_GET_RANGE_FROM_ANGLE, GetRangeFromAngle)
+        gen_nav_target = rospy.ServiceProxy(SERVICE_GENERATE_NAVIGATION_TARGET, GenerateNavigationTarget)
 
         rospy.loginfo('Image recognition node started')
 
@@ -55,19 +58,21 @@ class BeaconFinder:
 
     def is_found(self, bc):
         for foundBeacons in self.found:
-            if bc.topColour == foundBeacons.topColor and bc.bottomColour == foundBeacons.bottomColor:
+            if bc.topColour == foundBeacons.topColour and bc.bottomColour == foundBeacons.bottomColour:
                 return True
         return False
 
-    def check_for_beacons(self, im):
+    def check_for_beacons(self, im_rgb):
         rospy.loginfo("Processing image")
+
+        im = cv2.cvtColor(im_rgb,cv2.COLOR_BGR2HSV)
 
         #Cut image in half, only process top half
         rows, cols, chs = im.shape
         region = im[0:(rows / 2), 0:cols]
 
-        #BGR lower and upper range for pink
-        pink_boundaries = [(120, 60, 210), (210, 150, 255)]
+        #HSV lower and upper range for pink
+        pink_boundaries = [(168, 71, 82), (163, 41, 100)]
 
         lower = np.array(pink_boundaries[0], "uint8")
         upper = np.array(pink_boundaries[1], "uint8")
@@ -93,7 +98,7 @@ class BeaconFinder:
         areas.sort(key=operator.itemgetter(1), reverse=True)
 
         i = 0
-        area_threshold = 1000
+        area_threshold = 100
         beacons_list = []
 
         #Only look at contours with areas above a certain threshold
@@ -115,30 +120,35 @@ class BeaconFinder:
             bc = self.check_region(top_region, 0)
             if bc.topColour == 'none':
                 bc = self.check_region(bottom_region, 1)
+            if bc.topColour == 'none':
+                rospy.loginfo("False positive for pink")
+                i += 1
+                continue
 
             with self.found_list_lock:  # read-write lock for found list
                 if not self.is_found(bc):
                     #Calculate angle to centre of beacon
                     d = cols / 2
                     alpha = math.atan((d - cols) / d * math.tan(math.radians(61.5)))
+                    rospy.loginfo("Beacon found at %f" % math.degrees(alpha))
                     try:
                         #Get range to beacon
                         #Create navigation target and add to beacon
                         get_range_request = GetRangeFromAngleRequest()
                         get_range_request.angle = alpha
-                        beacon_range = self.get_range_from_angle(get_range_request).range
+                        beacon_range = get_range_from_angle(get_range_request).range
                         gen_nav_target_request = GenerateNavigationTargetRequest()
                         gen_nav_target_request.range = beacon_range
                         gen_nav_target_request.angle = alpha
-                        bc.target = self.gen_nav_target(gen_nav_target_request).target
+                        bc.target = gen_nav_target(gen_nav_target_request).target
                         beacons_list.append(bc)
                         self.found.append(bc)
+                        rospy.loginfo("Beacon located at (%d, %d)" % (bc.target.point.x, bc.target.point.y))
                     except rospy.ServiceException, e:
                         print "Service call failed: %s" % e
                 else:
                     pass
             i += 1
-            rospy.loginfo("Increment: %d" % i)
 
         if not rospy.is_shutdown():
             #Publish list of found beacons
@@ -149,10 +159,10 @@ class BeaconFinder:
     @staticmethod
     #Check region for colour, create beacon object
     def check_region(image, region):
-        #BGR lower and upper range for green, blue and yellow
-        green_boundaries = [(60, 80, 0), (90, 110, 10)]
-        blue_boundaries = [(150, 100, 0), (250, 191, 61)]
-        yellow_boundaries = [(0, 140, 160), (70, 240, 255)]
+        #HSV lower and upper range for green, blue and yellow
+        green_boundaries = [(83, 100, 31), (84, 91, 43)]
+        blue_boundaries = [(100, 100, 59), (100, 76, 98)]
+        yellow_boundaries = [(27, 100, 63), (28, 73, 100)]
 
         green_lower = np.array(green_boundaries[0], "uint8")
         green_upper = np.array(green_boundaries[1], "uint8")
@@ -166,6 +176,7 @@ class BeaconFinder:
         mask_green = cv2.inRange(image, green_lower, green_upper)
         mask_blue = cv2.inRange(image, blue_lower, blue_upper)
         mask_yellow = cv2.inRange(image, yellow_lower, yellow_upper)
+
 
         contours_green, hierarchy_green = cv2.findContours(mask_green, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         areas_green = []
@@ -187,21 +198,21 @@ class BeaconFinder:
 
         bc = Beacon()
         #Check maximum area for contours of each colour
-        if max(areas_green) > 1000:
+        if len(areas_green) != 0 and max(areas_green) > 100:
             if region == 0:
                 bc.topColour = 'green'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'green'
-        elif max(areas_blue) > 1000:
+        elif len(areas_blue) != 0 and max(areas_blue) > 100:
             if region == 0:
                 bc.topColour = 'blue'
                 bc.bottomColour = 'pink'
             else:
                 bc.topColour = 'pink'
                 bc.bottomColour = 'blue'
-        elif max(areas_yellow) > 1000:
+        elif len(areas_yellow) != 0 and max(areas_yellow) > 100:
             if region == 0:
                 bc.topColour = 'yellow'
                 bc.bottomColour = 'pink'
