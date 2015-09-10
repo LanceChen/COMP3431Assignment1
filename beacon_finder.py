@@ -77,6 +77,10 @@ class BeaconFinder:
                     response.status = 'Error: %s' % e
             else:
                 response.status = 'Beacon already found'
+        # Publish list of found beacons
+        bl = BeaconList()
+        bl.foundBeacons.append(bc)
+        self.beacon_pub.publish(bl)
         return response
 
     def handle_stop_monitor(self, request):
