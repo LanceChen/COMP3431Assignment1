@@ -7,11 +7,13 @@ import operator
 # def checkForBeacons(image):
 images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
 for i in images:
-    im = cv2.imread(i)
-    pinkBoundaries = [(120, 60, 210), (210, 150, 255)]
+    im_rgb = cv2.imread(i)
+    im = cv2.cvtColor(im_rgb, cv2.COLOR_BGR2HSV)
 
-    lower = np.array(pinkBoundaries[0], "uint8")
-    upper = np.array(pinkBoundaries[1], "uint8")
+    pink_boundaries = [(140, 128, 128), (180, 255, 255)]
+
+    lower = np.array(pink_boundaries[0], "uint8")
+    upper = np.array(pink_boundaries[1], "uint8")
 
     mask = cv2.inRange(im, lower, upper)
     cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
@@ -26,6 +28,39 @@ for i in images:
     cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
     cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
     cv2.imshow("image", np.hstack([mask]))
+    cv2.waitKey(0)
+
+    green_boundaries = [(50, 128, 128), (80, 255, 255)]
+    blue_boundaries = [(100, 128, 128), (140, 255, 255)]
+    yellow_boundaries = [(27, 128, 128), (30, 255, 255)]
+
+    greenLower = np.array(green_boundaries[0], "uint8")
+    greenUpper = np.array(green_boundaries[1], "uint8")
+
+
+
+    blueLower = np.array(blue_boundaries[0], "uint8")
+    blueUpper = np.array(blue_boundaries[1], "uint8")
+
+
+
+    yellowLower = np.array(yellow_boundaries[0], "uint8")
+    yellowUpper = np.array(yellow_boundaries[1], "uint8")
+
+
+
+    maskGreen = cv2.inRange(im, greenLower, greenUpper)
+    maskBlue = cv2.inRange(im, blueLower, blueUpper)
+    maskYellow = cv2.inRange(im, yellowLower, yellowUpper)
+
+    cv2.namedWindow("green mask", cv2.cv.CV_WINDOW_NORMAL)
+    cv2.imshow("green mask", np.hstack([maskGreen]))
+    cv2.waitKey(0)
+    cv2.namedWindow("blue mask", cv2.cv.CV_WINDOW_NORMAL)
+    cv2.imshow("blue mask", np.hstack([maskBlue]))
+    cv2.waitKey(0)
+    cv2.namedWindow("yellow mask", cv2.cv.CV_WINDOW_NORMAL)
+    cv2.imshow("yellow mask", np.hstack([maskYellow]))
     cv2.waitKey(0)
 
     print ("Number of countours: ")
@@ -86,26 +121,26 @@ for i in images:
 
 
 def checkRegion(image, region):
-    greenBoundaries = [(60, 80, 0), (90, 110, 10)]
-    blueBoundaries = [(150, 100, 0), (250, 191, 61)]
-    yellowBoundaries = [(0, 140, 160), (70, 240, 255)]
+    green_boundaries = [(50, 128, 128), (80, 255, 255)]
+    blue_boundaries = [(100, 128, 128), (140, 255, 255)]
+    yellow_boundaries = [(27, 128, 128), (30, 255, 255)]
 
-    greenLower = np.array(greenBoundaries[0], "uint8")
-    greenUpper = np.array(greenBoundaries[1], "uint8")
+    greenLower = np.array(green_boundaries[0], "uint8")
+    greenUpper = np.array(green_boundaries[1], "uint8")
 
     # cv2.namedWindow("green mask", cv2.cv.CV_WINDOW_NORMAL)
     # cv2.imshow("green mask", np.hstack([mask2]))
     # cv2.waitKey(0)
 
-    blueLower = np.array(blueBoundaries[0], "uint8")
-    blueUpper = np.array(blueBoundaries[1], "uint8")
+    blueLower = np.array(blue_boundaries[0], "uint8")
+    blueUpper = np.array(blue_boundaries[1], "uint8")
 
     # cv2.namedWindow("blue mask", cv2.cv.CV_WINDOW_NORMAL)
     # cv2.imshow("blue mask", np.hstack([mask3]))
     # cv2.waitKey(0)
 
-    yellowLower = np.array(yellowBoundaries[0], "uint8")
-    yellowUpper = np.array(yellowBoundaries[1], "uint8")
+    yellowLower = np.array(yellow_boundaries[0], "uint8")
+    yellowUpper = np.array(yellow_boundaries[1], "uint8")
 
     # cv2.namedWindow("yellow mask", cv2.cv.CV_WINDOW_NORMAL)
     # cv2.imshow("yellow mask", np.hstack([mask4]))
