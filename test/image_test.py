@@ -7,10 +7,10 @@ import operator
 # def checkForBeacons(image):
 images = ['test0.jpg', 'test1.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg']
 for i in images:
-    im_rgb = cv2.imread(i)
-    im = cv2.cvtColor(im_rgb, cv2.COLOR_BGR2HSV)
+    im = cv2.imread(i)
+    #im = cv2.cvtColor(im_rgb, cv2.COLOR_BGR2HSV)
 
-    pink_boundaries = [(140, 128, 128), (180, 255, 255)]
+    pink_boundaries = [(120, 60, 210), (210, 150, 255)]
 
     lower = np.array(pink_boundaries[0], "uint8")
     upper = np.array(pink_boundaries[1], "uint8")
@@ -19,6 +19,7 @@ for i in images:
     cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
     cv2.imshow("image", np.hstack([im]))
     cv2.waitKey(0)
+    cv2.namedWindow("image", cv2.cv.CV_WINDOW_NORMAL)
     cv2.imshow("image", np.hstack([mask]))
     cv2.waitKey(0)
 
@@ -30,9 +31,11 @@ for i in images:
     cv2.imshow("image", np.hstack([mask]))
     cv2.waitKey(0)
 
-    green_boundaries = [(50, 128, 128), (80, 255, 255)]
-    blue_boundaries = [(100, 128, 128), (140, 255, 255)]
-    yellow_boundaries = [(27, 128, 128), (30, 255, 255)]
+    green_boundaries = [(60, 80, 0), (90, 110, 10)]
+    blue_boundaries = [(150, 100, 0), (250, 191, 61)]
+    yellow_boundaries = [(0, 140, 160), (70, 240, 255)]
+
+
 
     greenLower = np.array(green_boundaries[0], "uint8")
     greenUpper = np.array(green_boundaries[1], "uint8")

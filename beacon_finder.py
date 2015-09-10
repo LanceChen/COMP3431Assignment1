@@ -98,17 +98,15 @@ class BeaconFinder:
                 return True
         return False
 
-    def check_for_beacons(self, im_rgb):
+    def check_for_beacons(self, im):
         rospy.loginfo("Processing image")
-
-        im = cv2.cvtColor(im_rgb, cv2.COLOR_BGR2HSV)
 
         # Cut image in half, only process top half
         rows, cols, chs = im.shape
         region = im[0:(rows / 2), 0:cols]
 
-        # HSV lower and upper range for pink
-        pink_boundaries = [(140, 128, 128), (180, 255, 255)]
+        # BGR lower and upper range for pink
+        pink_boundaries = [(120, 60, 210), (210, 150, 255)]
 
         lower = np.array(pink_boundaries[0], "uint8")
         upper = np.array(pink_boundaries[1], "uint8")
@@ -197,10 +195,10 @@ class BeaconFinder:
     @staticmethod
     # Check region for colour, create beacon object
     def check_region(image, region):
-        # HSV lower and upper range for green, blue and yellow
-        green_boundaries = [(50, 128, 128), (80, 255, 255)]
-        blue_boundaries = [(100, 128, 128), (140, 255, 255)]
-        yellow_boundaries = [(27, 128, 128), (30, 255, 255)]
+        # BGR lower and upper range for green, blue and yellow
+        green_boundaries = [(60, 80, 0), (90, 110, 10)]
+        blue_boundaries = [(150, 100, 0), (250, 191, 61)]
+        yellow_boundaries = [(0, 140, 160), (70, 240, 255)]
 
         green_lower = np.array(green_boundaries[0], "uint8")
         green_upper = np.array(green_boundaries[1], "uint8")
