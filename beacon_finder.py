@@ -15,7 +15,7 @@ from assignment1.srv import *
 from explore import SERVICE_GET_RANGE_FROM_ANGLE
 from map_navigator import SERVICE_GENERATE_NAVIGATION_TARGET
 
-SERVICE_BEACON_CHEATER = "beacon_cheater"
+SERVICE_BEACON_DEBUGGER = "beacon_debugger"
 
 TOPIC_BEACONS_IN_CAMERA = 'beacon_list'
 SERVICE_STOP_MONITOR_CAMERA = 'stop_monitor_camera'
@@ -37,7 +37,7 @@ class BeaconFinder:
         self.image_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.callback)
         self.beacon_pub = rospy.Publisher(TOPIC_BEACONS_IN_CAMERA, BeaconList, queue_size=10)
         rospy.Service(SERVICE_STOP_MONITOR_CAMERA, StopMonitorCamera, self.handle_stop_monitor)
-        rospy.Service(SERVICE_BEACON_CHEATER, BeaconCheat, self.handle_beacon_cheat)
+        rospy.Service(SERVICE_BEACON_DEBUGGER, BeaconDebugger, self.handle_beacon_debugger)
 
         # wait and initialize proxies for all related services
         rospy.wait_for_service(SERVICE_GET_RANGE_FROM_ANGLE)
@@ -47,14 +47,14 @@ class BeaconFinder:
 
         rospy.loginfo('Image recognition node started')
 
-    def handle_beacon_cheat(self, request):
+    def handle_beacon_debugger(self, request):
         """
-        @type request: BeaconCheatRequest
+        @type request: BeaconDebuggerRequest
         """
         bc = Beacon()
         bc.topColour = request.topColour
         bc.bottomColour = request.bottomColour
-        response = BeaconCheatResponse()
+        response = BeaconDebuggerResponse()
         with self.found_list_lock:  # read-write lock for found list
             if not self.is_found(bc):
                 alpha = request.angle
