@@ -64,7 +64,7 @@ add_service_files(
   StopExplore.srv
   GetRangeFromAngle.srv
   StopMonitorCamera.srv
-  BeaconCheat.srv
+  BeaconDebugger.srv
   ContinueExplore.srv
 )
 
