@@ -122,73 +122,58 @@ class BeaconFinder:
         # RETR_EXTERNAL for external contours only
         # CHAIN_APPROX_SIMPLE for approximation
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # cv2.drawContours(mask, contours, -1, (128, 255, 0), 3)
 
-        areas = []
-        cnt_num = 0
-
-        # List of contour number and areas
-        for cnt in contours:
-            areas.append((cnt_num, cv2.contourArea(cnt)))
-            rospy.loginfo(cv2.contourArea(cnt))
-            cnt_num += 1
-
-        # Sort by area
-        areas.sort(key=operator.itemgetter(1), reverse=True)
-
-        i = 0
         area_threshold = 50
         beacons_list = []
 
-        # Only look at contours with areas above a certain threshold
-        while i < len(areas) and areas[i][1] > area_threshold:
-            rospy.loginfo(areas[i][1])
-            leftmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmin()][0])
-            rightmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 0].argmax()][0])
-            topmost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmin()][0])
-            bottommost = tuple(contours[areas[i][0]][contours[areas[i][0]][:, :, 1].argmax()][0])
+        for cnt in contours:
+            # Only look at contours with areas above a certain threshold
+            if cv2.contourArea(cnt) > area_threshold:
+                rospy.loginfo(cv2.contourArea(cnt))
+                leftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
+                rightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
+                topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+                bottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
 
-            left_x = leftmost[0]
-            right_x = rightmost[0]
-            top_y = topmost[1]
-            bottom_y = bottommost[1]
+                left_x = leftmost[0]
+                right_x = rightmost[0]
+                top_y = topmost[1]
+                bottom_y = bottommost[1]
 
-            # Check region above and below pink region
-            top_region = region[:top_y, left_x:right_x]
-            bottom_region = region[bottom_y:, left_x:right_x]
+                # Check region above and below pink region
+                top_region = region[:top_y, left_x:right_x]
+                bottom_region = region[bottom_y:, left_x:right_x]
 
-            bc = self.check_region(top_region, 0)
-            if bc.topColour == 'none':
-                bc = self.check_region(bottom_region, 1)
-            if bc.topColour == 'none':
-                rospy.loginfo("False positive for pink")
-                i += 1
-                continue
+                bc = self.check_region(top_region, 0)
+                if bc.topColour == 'none':
+                    bc = self.check_region(bottom_region, 1)
+                if bc.topColour == 'none':
+                    rospy.loginfo("False positive for pink")
+                    continue
 
-            with self.found_list_lock:  # read-write lock for found list
-                if not self.is_found(bc):
-                    # Calculate angle to centre of beacon
-                    d = cols / 2
-                    alpha = math.atan((d - (left_x + right_x) / 2) / d * math.tan(math.radians(61.5)))
-                    rospy.loginfo("Beacon found at %f" % math.degrees(alpha))
-                    try:
-                        # Get range to beacon
-                        # Create navigation target and add to beacon
-                        get_range_request = GetRangeFromAngleRequest()
-                        get_range_request.angle = alpha
-                        beacon_range = get_range_from_angle(get_range_request).range
-                        gen_nav_target_request = GenerateNavigationTargetRequest()
-                        gen_nav_target_request.range = beacon_range
-                        gen_nav_target_request.angle = alpha
-                        bc.target = gen_nav_target(gen_nav_target_request).target
-                        beacons_list.append(bc)
-                        self.found.append(bc)
-                        rospy.loginfo("Beacon located at (%d, %d)" % (bc.target.point.x, bc.target.point.y))
-                    except rospy.ServiceException, e:
-                        print "Service call failed: %s" % e
-                else:
-                    pass
-            i += 1
+                with self.found_list_lock:  # read-write lock for found list
+                    if not self.is_found(bc):
+                        # Calculate angle to centre of beacon
+                        d = cols / 2
+                        alpha = math.atan((d - (left_x + right_x) / 2) / d * math.tan(math.radians(61.5)))
+                        rospy.loginfo("Beacon found at %f" % math.degrees(alpha))
+                        try:
+                            # Get range to beacon
+                            # Create navigation target and add to beacon
+                            get_range_request = GetRangeFromAngleRequest()
+                            get_range_request.angle = alpha
+                            beacon_range = get_range_from_angle(get_range_request).range
+                            gen_nav_target_request = GenerateNavigationTargetRequest()
+                            gen_nav_target_request.range = beacon_range
+                            gen_nav_target_request.angle = alpha
+                            bc.target = gen_nav_target(gen_nav_target_request).target
+                            beacons_list.append(bc)
+                            self.found.append(bc)
+                            rospy.loginfo("Beacon located at (%d, %d)" % (bc.target.point.x, bc.target.point.y))
+                        except rospy.ServiceException, e:
+                            print "Service call failed: %s" % e
+                    else:
+                        pass
 
         if not rospy.is_shutdown():
             # Publish list of found beacons
